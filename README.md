@@ -1,36 +1,93 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RumbleRoll
+
+A real-time web application for Royal Rumble watch parties that distributes entry numbers among participants and tracks eliminations live.
+
+## Features
+
+- **Party Management**: Create and join watch parties with invite codes
+- **Number Distribution**: Fairly distribute all 30 entry numbers among participants
+- **Live Tracking**: Track wrestler entries and eliminations in real-time
+- **TV Display**: Large-screen optimized view for watching together
+- **Standings**: See who's winning as wrestlers get eliminated
+- **Results**: View complete match history after the event
+
+## Tech Stack
+
+- **Frontend**: Next.js 14 (App Router), TypeScript, Tailwind CSS
+- **UI Components**: shadcn/ui
+- **Auth**: NextAuth.js (email/password)
+- **Database**: PostgreSQL with Prisma ORM
+- **Deployment**: Vercel + Neon/Supabase
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
+- Node.js 18+
+- PostgreSQL database (local or hosted)
+
+### Installation
+
+1. Clone the repository:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/yourusername/rumblegame.git
+cd rumblegame
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install dependencies:
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Set up environment variables:
+```bash
+cp .env .env.local
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Edit `.env.local` with your values:
+```
+DATABASE_URL="postgresql://user:password@localhost:5432/rumblegame"
+AUTH_SECRET="your-secret-key"
+NEXTAUTH_URL="http://localhost:3000"
+```
 
-## Learn More
+4. Set up the database:
+```bash
+npx prisma db push
+```
 
-To learn more about Next.js, take a look at the following resources:
+5. Run the development server:
+```bash
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Open [http://localhost:3000](http://localhost:3000) to see the app.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deployment
 
-## Deploy on Vercel
+### Vercel + Neon
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Create a [Neon](https://neon.tech) database
+2. Deploy to [Vercel](https://vercel.com)
+3. Add environment variables in Vercel:
+   - `DATABASE_URL`: Your Neon connection string
+   - `AUTH_SECRET`: Generate with `openssl rand -base64 32`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## How It Works
+
+1. **Create a Party**: Host creates a party and gets an invite code
+2. **Invite Friends**: Share the code with friends to join
+3. **Distribute Numbers**: Host triggers random distribution of numbers 1-30
+4. **Track the Match**: Host updates wrestler entries and eliminations
+5. **TV Display**: Everyone watches the standings update live
+
+## Number Distribution
+
+Numbers are distributed fairly among participants:
+- Each person gets `floor(30/N)` numbers
+- Remainder numbers are randomly assigned
+- Example: 6 people = 5 numbers each; 7 people = 4-5 each
+
+## License
+
+MIT

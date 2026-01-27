@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  hostedParties    Party[]            @relation("HostedParties")
+  participations   PartyParticipant[]
+}
+
+model Party {
+  id          String      @id @default(cuid())
+  name        String
+  eventName   String      @default("Royal Rumble 2025")
+  inviteCode  String      @unique
+  status      PartyStatus @default(LOBBY)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  hostId       String
+  host         User                @relation("HostedParties", fields: [hostId], references: [id])
+  participants PartyParticipant[]
+  entries      RumbleEntry[]
+}
+
+model PartyParticipant {
+  id        String   @id @default(cuid())
+  joinedAt  DateTime @default(now())
+
+  partyId   String
+  party     Party  @relation(fields: [partyId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User   @relation(fields: [userId], references: [id])
+
+  assignments NumberAssignment[]
+
+  @@unique([partyId, userId])
+}
+
+model NumberAssignment {
+  id          String @id @default(cuid())
+  entryNumber Int    // 1-30
+
+  participantId String
+  participant   PartyParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  entry         RumbleEntry?
+
+  @@unique([participantId, entryNumber])
+}
+
+model RumbleEntry {
+  id           String    @id @default(cuid())
+  entryNumber  Int       // 1-30
+  wrestlerName String?
+  enteredAt    DateTime?
+  eliminatedAt DateTime?
+  eliminatedBy String?   // Name of wrestler who eliminated them
+  isWinner     Boolean   @default(false)
+
+  partyId      String
+  party        Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+
+  assignmentId String?  @unique
+  assignment   NumberAssignment? @relation(fields: [assignmentId], references: [id])
+
+  @@unique([partyId, entryNumber])
+}
+
+enum PartyStatus {
+  LOBBY
+  NUMBERS_ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+}
