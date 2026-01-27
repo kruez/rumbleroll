@@ -20,6 +20,7 @@ export async function GET() {
       },
       include: {
         host: { select: { id: true, name: true, email: true } },
+        event: { select: { id: true, name: true, year: true, status: true } },
         participants: {
           include: {
             user: { select: { id: true, name: true, email: true } },
@@ -45,10 +46,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { name, eventName } = await request.json();
+    const { name, eventId } = await request.json();
 
     if (!name) {
       return NextResponse.json({ error: "Party name is required" }, { status: 400 });
+    }
+
+    if (!eventId) {
+      return NextResponse.json({ error: "Event is required" }, { status: 400 });
+    }
+
+    // Verify event exists
+    const event = await prisma.rumbleEvent.findUnique({
+      where: { id: eventId },
+    });
+
+    if (!event) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
 
     // Generate unique invite code
@@ -64,9 +78,9 @@ export async function POST(request: Request) {
     const party = await prisma.party.create({
       data: {
         name,
-        eventName: eventName || "Royal Rumble 2025",
         inviteCode,
         hostId: session.user.id,
+        eventId,
         participants: {
           create: {
             userId: session.user.id,
@@ -75,6 +89,7 @@ export async function POST(request: Request) {
       },
       include: {
         host: { select: { id: true, name: true, email: true } },
+        event: { select: { id: true, name: true, year: true, status: true } },
         participants: {
           include: {
             user: { select: { id: true, name: true, email: true } },

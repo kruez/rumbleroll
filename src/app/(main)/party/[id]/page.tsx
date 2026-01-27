@@ -21,7 +21,6 @@ interface Entry {
 interface Assignment {
   id: string;
   entryNumber: number;
-  entry: Entry | null;
 }
 
 interface Participant {
@@ -30,16 +29,23 @@ interface Participant {
   assignments: Assignment[];
 }
 
+interface RumbleEvent {
+  id: string;
+  name: string;
+  year: number;
+  status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+  entries: Entry[];
+}
+
 interface Party {
   id: string;
   name: string;
-  eventName: string;
   inviteCode: string;
-  status: "LOBBY" | "NUMBERS_ASSIGNED" | "IN_PROGRESS" | "COMPLETED";
+  status: "LOBBY" | "NUMBERS_ASSIGNED" | "COMPLETED";
   hostId: string;
   host: { id: string; name: string | null; email: string };
+  event: RumbleEvent;
   participants: Participant[];
-  entries: Entry[];
   isHost: boolean;
 }
 
@@ -96,7 +102,13 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
 
   // Find current user's participant record
   const myParticipant = party.participants.find(p => p.user.id === session?.user?.id);
-  const myNumbers = myParticipant?.assignments || [];
+  const myAssignments = myParticipant?.assignments || [];
+
+  // Get entry data for each assignment
+  const myNumbers = myAssignments.map(a => {
+    const entry = party.event.entries.find(e => e.entryNumber === a.entryNumber);
+    return { ...a, entry };
+  });
 
   const getStatusBadge = () => {
     switch (party.status) {
@@ -104,25 +116,26 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
         return <Badge className="bg-blue-500">Waiting for Players</Badge>;
       case "NUMBERS_ASSIGNED":
         return <Badge className="bg-yellow-500">Numbers Assigned</Badge>;
-      case "IN_PROGRESS":
-        return <Badge className="bg-green-500">Match In Progress</Badge>;
       case "COMPLETED":
         return <Badge className="bg-gray-500">Completed</Badge>;
     }
   };
 
-  const getEntryStatus = (assignment: Assignment) => {
-    if (!assignment.entry?.wrestlerName) {
+  const getEntryStatus = (entry: Entry | undefined) => {
+    if (!entry?.wrestlerName) {
       return { status: "waiting", label: "Not yet entered", color: "bg-gray-600" };
     }
-    if (assignment.entry.isWinner) {
+    if (entry.isWinner) {
       return { status: "winner", label: "WINNER!", color: "bg-yellow-500" };
     }
-    if (assignment.entry.eliminatedAt) {
-      return { status: "eliminated", label: `Eliminated by ${assignment.entry.eliminatedBy}`, color: "bg-red-500" };
+    if (entry.eliminatedAt) {
+      return { status: "eliminated", label: `Eliminated by ${entry.eliminatedBy}`, color: "bg-red-500" };
     }
     return { status: "active", label: "In the Ring!", color: "bg-green-500" };
   };
+
+  // Calculate stats from event entries
+  const entries = party.event.entries;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
@@ -135,7 +148,7 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                 &larr; Dashboard
               </Link>
               <h1 className="text-2xl font-bold text-white">{party.name}</h1>
-              <p className="text-gray-400">{party.eventName}</p>
+              <p className="text-gray-400">{party.event.name}</p>
             </div>
             <div className="flex items-center gap-4">
               {getStatusBadge()}
@@ -147,13 +160,13 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                 </Link>
               )}
               <Link href={`/party/${party.id}/tv`}>
-                <Button variant="outline" className="border-white text-white hover:bg-white/10">
+                <Button variant="outline" className="bg-transparent border-white text-white hover:bg-white/10">
                   TV Display
                 </Button>
               </Link>
               {party.status === "COMPLETED" && (
                 <Link href={`/party/${party.id}/results`}>
-                  <Button variant="outline" className="border-yellow-500 text-yellow-500 hover:bg-yellow-500/10">
+                  <Button variant="outline" className="bg-transparent border-yellow-500 text-yellow-500 hover:bg-yellow-500/10">
                     View Results
                   </Button>
                 </Link>
@@ -189,7 +202,7 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                     {myNumbers
                       .sort((a, b) => a.entryNumber - b.entryNumber)
                       .map((assignment) => {
-                        const entryStatus = getEntryStatus(assignment);
+                        const entryStatus = getEntryStatus(assignment.entry);
                         return (
                           <div
                             key={assignment.id}
@@ -255,10 +268,13 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
               <CardContent>
                 <div className="space-y-3">
                   {party.participants.map((participant) => {
-                    const activeCount = participant.assignments.filter(
-                      a => a.entry?.wrestlerName && !a.entry?.eliminatedAt
+                    const participantEntries = participant.assignments.map(a =>
+                      entries.find(e => e.entryNumber === a.entryNumber)
+                    );
+                    const activeCount = participantEntries.filter(
+                      e => e?.wrestlerName && !e?.eliminatedAt
                     ).length;
-                    const hasWinner = participant.assignments.some(a => a.entry?.isWinner);
+                    const hasWinner = participantEntries.some(e => e?.isWinner);
 
                     return (
                       <div
@@ -300,21 +316,21 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                     <div className="flex justify-between">
                       <span className="text-gray-400">Entered</span>
                       <span className="text-white font-bold">
-                        {party.entries.filter(e => e.wrestlerName).length} / 30
+                        {entries.filter(e => e.wrestlerName).length} / 30
                       </span>
                     </div>
                     <Separator className="bg-gray-700" />
                     <div className="flex justify-between">
                       <span className="text-gray-400">Eliminated</span>
                       <span className="text-white font-bold">
-                        {party.entries.filter(e => e.eliminatedAt).length}
+                        {entries.filter(e => e.eliminatedAt).length}
                       </span>
                     </div>
                     <Separator className="bg-gray-700" />
                     <div className="flex justify-between">
                       <span className="text-gray-400">In Ring</span>
                       <span className="text-white font-bold">
-                        {party.entries.filter(e => e.wrestlerName && !e.eliminatedAt).length}
+                        {entries.filter(e => e.wrestlerName && !e.eliminatedAt).length}
                       </span>
                     </div>
                   </div>

@@ -19,19 +19,17 @@ export async function GET(
       where: { id },
       include: {
         host: { select: { id: true, name: true, email: true } },
+        event: {
+          include: {
+            entries: { orderBy: { entryNumber: "asc" } },
+          },
+        },
         participants: {
           include: {
             user: { select: { id: true, name: true, email: true } },
-            assignments: {
-              include: {
-                entry: true,
-              },
-            },
           },
         },
-        entries: {
-          orderBy: { entryNumber: "asc" },
-        },
+        assignments: true,
       },
     });
 
@@ -47,7 +45,28 @@ export async function GET(
       return NextResponse.json({ error: "Not a party member" }, { status: 403 });
     }
 
-    return NextResponse.json({ ...party, isHost });
+    // Transform data to include assignments with each participant
+    const participantsWithAssignments = party.participants.map(p => ({
+      ...p,
+      assignments: party.assignments
+        .filter(a => a.participantId === p.id)
+        .map(a => ({
+          id: a.id,
+          entryNumber: a.entryNumber,
+        })),
+    }));
+
+    return NextResponse.json({
+      id: party.id,
+      name: party.name,
+      inviteCode: party.inviteCode,
+      status: party.status,
+      hostId: party.hostId,
+      host: party.host,
+      event: party.event,
+      participants: participantsWithAssignments,
+      isHost,
+    });
   } catch (error) {
     console.error("Error fetching party:", error);
     return NextResponse.json({ error: "Failed to fetch party" }, { status: 500 });

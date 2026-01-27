@@ -10,14 +10,21 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
+interface RumbleEvent {
+  id: string;
+  name: string;
+  year: number;
+  status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+}
+
 interface Party {
   id: string;
   name: string;
-  eventName: string;
   inviteCode: string;
-  status: "LOBBY" | "NUMBERS_ASSIGNED" | "IN_PROGRESS" | "COMPLETED";
+  status: "LOBBY" | "NUMBERS_ASSIGNED" | "COMPLETED";
   hostId: string;
   host: { id: string; name: string | null; email: string };
+  event: RumbleEvent;
   _count: { participants: number };
 }
 
@@ -77,8 +84,6 @@ export default function DashboardPage() {
         return "bg-blue-500";
       case "NUMBERS_ASSIGNED":
         return "bg-yellow-500";
-      case "IN_PROGRESS":
-        return "bg-green-500";
       case "COMPLETED":
         return "bg-gray-500";
     }
@@ -90,8 +95,6 @@ export default function DashboardPage() {
         return "Waiting";
       case "NUMBERS_ASSIGNED":
         return "Ready";
-      case "IN_PROGRESS":
-        return "Live";
       case "COMPLETED":
         return "Finished";
     }
@@ -106,6 +109,13 @@ export default function DashboardPage() {
             RumbleRoll
           </Link>
           <div className="flex items-center gap-4">
+            {session?.user?.isAdmin && (
+              <Link href="/admin">
+                <Button variant="ghost" className="text-yellow-400 hover:text-yellow-300">
+                  Admin
+                </Button>
+              </Link>
+            )}
             <span className="text-gray-300">{session?.user?.name || session?.user?.email}</span>
             <Button variant="ghost" onClick={() => signOut()} className="text-gray-300">
               Sign Out
@@ -120,7 +130,7 @@ export default function DashboardPage() {
           <div className="flex gap-4">
             <Dialog open={joinDialogOpen} onOpenChange={setJoinDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="border-white text-white hover:bg-white/10">
+                <Button variant="outline" className="bg-transparent border-white text-white hover:bg-white/10">
                   Join Party
                 </Button>
               </DialogTrigger>
@@ -173,7 +183,7 @@ export default function DashboardPage() {
                     <div className="flex justify-between items-start">
                       <div>
                         <CardTitle className="text-white">{party.name}</CardTitle>
-                        <CardDescription className="text-gray-400">{party.eventName}</CardDescription>
+                        <CardDescription className="text-gray-400">{party.event.name}</CardDescription>
                       </div>
                       <Badge className={getStatusColor(party.status)}>
                         {getStatusLabel(party.status)}

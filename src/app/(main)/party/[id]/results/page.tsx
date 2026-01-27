@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 
 interface Entry {
   id: string;
@@ -27,13 +26,20 @@ interface Participant {
   assignments: Assignment[];
 }
 
+interface RumbleEvent {
+  id: string;
+  name: string;
+  year: number;
+  status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+  entries: Entry[];
+}
+
 interface Party {
   id: string;
   name: string;
-  eventName: string;
-  status: "LOBBY" | "NUMBERS_ASSIGNED" | "IN_PROGRESS" | "COMPLETED";
+  status: "LOBBY" | "NUMBERS_ASSIGNED" | "COMPLETED";
+  event: RumbleEvent;
   participants: Participant[];
-  entries: Entry[];
   isHost: boolean;
 }
 
@@ -75,7 +81,9 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
     );
   }
 
-  const winner = party.entries.find((e) => e.isWinner);
+  const entries = party.event.entries;
+  const winner = entries.find((e) => e.isWinner);
+
   const getParticipantForEntry = (entryNumber: number) => {
     for (const p of party.participants) {
       if (p.assignments.some((a) => a.entryNumber === entryNumber)) {
@@ -89,7 +97,7 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
   const standings = party.participants
     .map((p) => {
       const assignments = p.assignments.map((a) => {
-        const entry = party.entries.find((e) => e.entryNumber === a.entryNumber);
+        const entry = entries.find((e) => e.entryNumber === a.entryNumber);
         return { ...a, entry };
       });
       const winnerEntry = assignments.find((a) => a.entry?.isWinner);
@@ -118,9 +126,11 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
     });
 
   // Sort eliminations chronologically
-  const eliminationOrder = party.entries
+  const eliminationOrder = entries
     .filter((e) => e.eliminatedAt)
     .sort((a, b) => new Date(a.eliminatedAt!).getTime() - new Date(b.eliminatedAt!).getTime());
+
+  const isCompleted = party.event.status === "COMPLETED";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
@@ -131,12 +141,12 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
             &larr; Back to Party
           </Link>
           <h1 className="text-2xl font-bold text-white">{party.name} Results</h1>
-          <p className="text-gray-400">{party.eventName}</p>
+          <p className="text-gray-400">{party.event.name}</p>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        {party.status !== "COMPLETED" ? (
+        {!isCompleted ? (
           <Card className="bg-gray-800/50 border-gray-700">
             <CardContent className="py-12 text-center">
               <p className="text-gray-400 text-xl">The match hasn&apos;t finished yet!</p>
@@ -236,7 +246,7 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                  {party.entries
+                  {entries
                     .filter((e) => e.wrestlerName)
                     .sort((a, b) => a.entryNumber - b.entryNumber)
                     .map((entry) => (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -8,24 +8,67 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+interface RumbleEvent {
+  id: string;
+  name: string;
+  year: number;
+  status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+}
 
 export default function CreatePartyPage() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [eventName, setEventName] = useState("Royal Rumble 2025");
+  const [eventId, setEventId] = useState("");
+  const [events, setEvents] = useState<RumbleEvent[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingEvents, setLoadingEvents] = useState(true);
+
+  useEffect(() => {
+    fetchEvents();
+  }, []);
+
+  const fetchEvents = async () => {
+    try {
+      const res = await fetch("/api/events");
+      if (res.ok) {
+        const data = await res.json();
+        setEvents(data);
+        // Auto-select the first active or not-started event
+        const activeEvent = data.find(
+          (e: RumbleEvent) => e.status === "IN_PROGRESS" || e.status === "NOT_STARTED"
+        );
+        if (activeEvent) {
+          setEventId(activeEvent.id);
+        } else if (data.length > 0) {
+          setEventId(data[0].id);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch events:", err);
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    if (!eventId) {
+      setError("Please select an event");
+      return;
+    }
+
     setLoading(true);
 
     try {
       const res = await fetch("/api/parties", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, eventName }),
+        body: JSON.stringify({ name, eventId }),
       });
 
       const data = await res.json();
@@ -78,17 +121,36 @@ export default function CreatePartyPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="eventName" className="text-white">Event Name</Label>
-                <Input
-                  id="eventName"
-                  placeholder="e.g., Royal Rumble 2025"
-                  value={eventName}
-                  onChange={(e) => setEventName(e.target.value)}
-                  className="bg-gray-900 border-gray-600 text-white"
-                />
+                <Label htmlFor="event" className="text-white">Event</Label>
+                {loadingEvents ? (
+                  <div className="text-gray-400 text-sm">Loading events...</div>
+                ) : events.length === 0 ? (
+                  <div className="text-yellow-400 text-sm">
+                    No events available. Please contact an admin to create one.
+                  </div>
+                ) : (
+                  <Select value={eventId} onValueChange={setEventId}>
+                    <SelectTrigger className="bg-gray-900 border-gray-600 text-white">
+                      <SelectValue placeholder="Select an event" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {events.map((event) => (
+                        <SelectItem key={event.id} value={event.id}>
+                          {event.name} ({event.year})
+                          {event.status === "IN_PROGRESS" && " - Live"}
+                          {event.status === "COMPLETED" && " - Finished"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
-              <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700" disabled={loading}>
+              <Button
+                type="submit"
+                className="w-full bg-purple-600 hover:bg-purple-700"
+                disabled={loading || !eventId || events.length === 0}
+              >
                 {loading ? "Creating..." : "Create Party"}
               </Button>
             </CardContent>

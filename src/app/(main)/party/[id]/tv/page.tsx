@@ -11,13 +11,11 @@ interface Entry {
   eliminatedAt: string | null;
   eliminatedBy: string | null;
   isWinner: boolean;
-  assignmentId: string | null;
 }
 
 interface Assignment {
   id: string;
   entryNumber: number;
-  entry: Entry | null;
 }
 
 interface Participant {
@@ -26,13 +24,20 @@ interface Participant {
   assignments: Assignment[];
 }
 
+interface RumbleEvent {
+  id: string;
+  name: string;
+  year: number;
+  status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+  entries: Entry[];
+}
+
 interface Party {
   id: string;
   name: string;
-  eventName: string;
-  status: "LOBBY" | "NUMBERS_ASSIGNED" | "IN_PROGRESS" | "COMPLETED";
+  status: "LOBBY" | "NUMBERS_ASSIGNED" | "COMPLETED";
+  event: RumbleEvent;
   participants: Participant[];
-  entries: Entry[];
 }
 
 export default function TVDisplayPage({ params }: { params: Promise<{ id: string }> }) {
@@ -77,15 +82,17 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     );
   }
 
+  const entries = party.event.entries;
+
   // Calculate standings
   const standings = party.participants
     .map((p) => {
       const activeCount = p.assignments.filter((a) => {
-        const entry = party.entries.find(e => e.entryNumber === a.entryNumber);
+        const entry = entries.find(e => e.entryNumber === a.entryNumber);
         return entry?.wrestlerName && !entry?.eliminatedAt;
       }).length;
       const hasWinner = p.assignments.some((a) => {
-        const entry = party.entries.find(e => e.entryNumber === a.entryNumber);
+        const entry = entries.find(e => e.entryNumber === a.entryNumber);
         return entry?.isWinner;
       });
       return {
@@ -101,16 +108,16 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
       return b.activeCount - a.activeCount;
     });
 
-  const activeWrestlers = party.entries
+  const activeWrestlers = entries
     .filter((e) => e.wrestlerName && !e.eliminatedAt && !e.isWinner)
     .sort((a, b) => a.entryNumber - b.entryNumber);
 
-  const recentEliminations = party.entries
+  const recentEliminations = entries
     .filter((e) => e.eliminatedAt)
     .sort((a, b) => new Date(b.eliminatedAt!).getTime() - new Date(a.eliminatedAt!).getTime())
     .slice(0, 5);
 
-  const winner = party.entries.find((e) => e.isWinner);
+  const winner = entries.find((e) => e.isWinner);
 
   const getParticipantForEntry = (entryNumber: number) => {
     for (const p of party.participants) {
@@ -125,7 +132,7 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-6 overflow-hidden">
       {/* Header */}
       <div className="text-center mb-6">
-        <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-2">{party.eventName}</h1>
+        <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-2">{party.event.name}</h1>
         <p className="text-xl text-purple-300">{party.name}</p>
       </div>
 
@@ -161,7 +168,7 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
               {standings.map((p, idx) => {
                 const activeNumbers = p.assignments
                   .filter((a) => {
-                    const entry = party.entries.find(e => e.entryNumber === a.entryNumber);
+                    const entry = entries.find(e => e.entryNumber === a.entryNumber);
                     return entry?.wrestlerName && !entry?.eliminatedAt;
                   })
                   .map((a) => a.entryNumber);
@@ -230,7 +237,7 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
               <h2 className="text-xl font-bold text-white mb-3">ENTRY TRACKER</h2>
               <div className="grid grid-cols-10 gap-2">
                 {Array.from({ length: 30 }, (_, i) => i + 1).map((num) => {
-                  const entry = party.entries.find((e) => e.entryNumber === num);
+                  const entry = entries.find((e) => e.entryNumber === num);
                   let bgColor = "bg-gray-700";
                   let textColor = "text-gray-400";
                   if (entry?.isWinner) {
@@ -262,7 +269,7 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
               ELIMINATIONS
               <Badge className="bg-red-500">
-                {party.entries.filter((e) => e.eliminatedAt).length}
+                {entries.filter((e) => e.eliminatedAt).length}
               </Badge>
             </h2>
             <div className="space-y-3 overflow-y-auto max-h-[calc(100%-3rem)]">

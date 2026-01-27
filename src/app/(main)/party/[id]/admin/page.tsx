@@ -5,12 +5,8 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
 interface Entry {
@@ -21,45 +17,45 @@ interface Entry {
   eliminatedAt: string | null;
   eliminatedBy: string | null;
   isWinner: boolean;
-  assignment?: {
-    participant: {
-      user: { id: string; name: string | null; email: string };
-    };
-  } | null;
+}
+
+interface Assignment {
+  id: string;
+  entryNumber: number;
+}
+
+interface Participant {
+  id: string;
+  user: { id: string; name: string | null; email: string };
+  assignments: Assignment[];
+}
+
+interface RumbleEvent {
+  id: string;
+  name: string;
+  year: number;
+  status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
+  entries: Entry[];
 }
 
 interface Party {
   id: string;
   name: string;
-  eventName: string;
   inviteCode: string;
-  status: "LOBBY" | "NUMBERS_ASSIGNED" | "IN_PROGRESS" | "COMPLETED";
+  status: "LOBBY" | "NUMBERS_ASSIGNED" | "COMPLETED";
   hostId: string;
-  participants: Array<{
-    id: string;
-    user: { id: string; name: string | null; email: string };
-  }>;
-  entries: Entry[];
+  event: RumbleEvent;
+  participants: Participant[];
   isHost: boolean;
 }
 
-export default function AdminPage({ params }: { params: Promise<{ id: string }> }) {
+export default function PartyAdminPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: session } = useSession();
   const router = useRouter();
   const [party, setParty] = useState<Party | null>(null);
   const [loading, setLoading] = useState(true);
   const [distributing, setDistributing] = useState(false);
-
-  // Entry dialog state
-  const [selectedEntry, setSelectedEntry] = useState<Entry | null>(null);
-  const [wrestlerName, setWrestlerName] = useState("");
-  const [entryDialogOpen, setEntryDialogOpen] = useState(false);
-
-  // Elimination dialog state
-  const [eliminateEntry, setEliminateEntry] = useState<Entry | null>(null);
-  const [eliminatedBy, setEliminatedBy] = useState("");
-  const [eliminateDialogOpen, setEliminateDialogOpen] = useState(false);
 
   const fetchParty = useCallback(async () => {
     try {
@@ -83,6 +79,9 @@ export default function AdminPage({ params }: { params: Promise<{ id: string }> 
 
   useEffect(() => {
     fetchParty();
+    // Poll for updates every 5 seconds
+    const interval = setInterval(fetchParty, 5000);
+    return () => clearInterval(interval);
   }, [fetchParty]);
 
   const handleDistribute = async () => {
@@ -103,88 +102,6 @@ export default function AdminPage({ params }: { params: Promise<{ id: string }> 
     }
   };
 
-  const handleSetWrestler = async () => {
-    if (!selectedEntry) return;
-
-    try {
-      const res = await fetch(`/api/parties/${id}/entries`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          entryNumber: selectedEntry.entryNumber,
-          wrestlerName,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || "Failed to update entry");
-        return;
-      }
-
-      toast.success(`#${selectedEntry.entryNumber} - ${wrestlerName} has entered!`);
-      setEntryDialogOpen(false);
-      setSelectedEntry(null);
-      setWrestlerName("");
-      fetchParty();
-    } catch {
-      toast.error("Failed to update entry");
-    }
-  };
-
-  const handleEliminate = async () => {
-    if (!eliminateEntry) return;
-
-    try {
-      const res = await fetch(`/api/parties/${id}/entries`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          entryNumber: eliminateEntry.entryNumber,
-          eliminatedBy,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || "Failed to eliminate");
-        return;
-      }
-
-      toast.success(`${eliminateEntry.wrestlerName} has been eliminated!`);
-      setEliminateDialogOpen(false);
-      setEliminateEntry(null);
-      setEliminatedBy("");
-      fetchParty();
-    } catch {
-      toast.error("Failed to eliminate");
-    }
-  };
-
-  const handleDeclareWinner = async (entry: Entry) => {
-    try {
-      const res = await fetch(`/api/parties/${id}/entries`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          entryNumber: entry.entryNumber,
-          isWinner: true,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || "Failed to declare winner");
-        return;
-      }
-
-      toast.success(`${entry.wrestlerName} wins the Royal Rumble!`);
-      fetchParty();
-    } catch {
-      toast.error("Failed to declare winner");
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
@@ -195,10 +112,21 @@ export default function AdminPage({ params }: { params: Promise<{ id: string }> 
 
   if (!party) return null;
 
-  const activeWrestlers = party.entries.filter(e => e.wrestlerName && !e.eliminatedAt && !e.isWinner);
-  const eliminatedWrestlers = party.entries.filter(e => e.eliminatedAt);
-  const pendingEntries = party.entries.filter(e => !e.wrestlerName);
+  const entries = party.event.entries;
+  const activeWrestlers = entries.filter(e => e.wrestlerName && !e.eliminatedAt && !e.isWinner);
+  const eliminatedWrestlers = entries.filter(e => e.eliminatedAt);
+  const pendingEntries = entries.filter(e => !e.wrestlerName);
   const nextEntry = pendingEntries.length > 0 ? Math.min(...pendingEntries.map(e => e.entryNumber)) : null;
+  const winner = entries.find(e => e.isWinner);
+
+  const getParticipantForEntry = (entryNumber: number) => {
+    for (const p of party.participants) {
+      if (p.assignments.some((a) => a.entryNumber === entryNumber)) {
+        return p.user.name || p.user.email.split("@")[0];
+      }
+    }
+    return "Not assigned";
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
@@ -211,10 +139,10 @@ export default function AdminPage({ params }: { params: Promise<{ id: string }> 
                 &larr; Back to Party
               </Link>
               <h1 className="text-2xl font-bold text-white">Host Controls</h1>
-              <p className="text-gray-400">{party.name} - {party.eventName}</p>
+              <p className="text-gray-400">{party.name} - {party.event.name}</p>
             </div>
             <Link href={`/party/${id}/tv`}>
-              <Button variant="outline" className="border-white text-white hover:bg-white/10">
+              <Button variant="outline" className="bg-transparent border-white text-white hover:bg-white/10">
                 Open TV Display
               </Button>
             </Link>
@@ -250,12 +178,28 @@ export default function AdminPage({ params }: { params: Promise<{ id: string }> 
           </Card>
         )}
 
-        {/* Entry Grid */}
+        {/* Numbers Distributed but Event Not Started */}
+        {party.status !== "LOBBY" && party.event.status === "NOT_STARTED" && (
+          <Card className="bg-blue-500/20 border-blue-500 mb-8">
+            <CardContent className="py-6">
+              <div className="text-center">
+                <p className="text-blue-400 text-sm font-medium mb-2">NUMBERS DISTRIBUTED</p>
+                <p className="text-xl text-white mb-2">Waiting for the event to start</p>
+                <p className="text-gray-400">
+                  The admin will update wrestlers and eliminations during the match.
+                  This page will update automatically.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Match Display */}
         {party.status !== "LOBBY" && (
           <div className="grid lg:grid-cols-3 gap-8">
-            {/* Next Entry */}
+            {/* Next Entry / Active Wrestlers */}
             <div className="lg:col-span-2">
-              {nextEntry && (
+              {nextEntry && !winner && party.event.status === "IN_PROGRESS" && (
                 <Card className="bg-yellow-500/20 border-yellow-500 mb-6">
                   <CardContent className="py-6">
                     <div className="flex items-center justify-between">
@@ -263,44 +207,9 @@ export default function AdminPage({ params }: { params: Promise<{ id: string }> 
                         <p className="text-yellow-500 text-sm font-medium">NEXT ENTRY</p>
                         <p className="text-4xl font-bold text-white">#{nextEntry}</p>
                         <p className="text-gray-400">
-                          Assigned to: {party.entries.find(e => e.entryNumber === nextEntry)?.assignment?.participant.user.name || "Unknown"}
+                          Assigned to: {getParticipantForEntry(nextEntry)}
                         </p>
                       </div>
-                      <Dialog open={entryDialogOpen} onOpenChange={setEntryDialogOpen}>
-                        <DialogTrigger asChild>
-                          <Button
-                            size="lg"
-                            className="bg-yellow-500 hover:bg-yellow-600 text-black font-bold"
-                            onClick={() => {
-                              setSelectedEntry(party.entries.find(e => e.entryNumber === nextEntry) || null);
-                              setWrestlerName("");
-                            }}
-                          >
-                            Enter Wrestler
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Entry #{selectedEntry?.entryNumber}</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-4 py-4">
-                            <div className="space-y-2">
-                              <Label>Wrestler Name</Label>
-                              <Input
-                                placeholder="e.g., John Cena"
-                                value={wrestlerName}
-                                onChange={(e) => setWrestlerName(e.target.value)}
-                                autoFocus
-                              />
-                            </div>
-                          </div>
-                          <DialogFooter>
-                            <Button onClick={handleSetWrestler} disabled={!wrestlerName.trim()}>
-                              Confirm Entry
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
                     </div>
                   </CardContent>
                 </Card>
@@ -331,68 +240,11 @@ export default function AdminPage({ params }: { params: Promise<{ id: string }> 
                               <div>
                                 <p className="text-white font-medium">{entry.wrestlerName}</p>
                                 <p className="text-gray-400 text-sm">
-                                  {entry.assignment?.participant.user.name || "Unknown"}
+                                  {getParticipantForEntry(entry.entryNumber)}
                                 </p>
                               </div>
                             </div>
-                            <div className="flex gap-2">
-                              <Dialog open={eliminateDialogOpen && eliminateEntry?.id === entry.id} onOpenChange={(open) => {
-                                setEliminateDialogOpen(open);
-                                if (!open) setEliminateEntry(null);
-                              }}>
-                                <DialogTrigger asChild>
-                                  <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    onClick={() => {
-                                      setEliminateEntry(entry);
-                                      setEliminatedBy("");
-                                    }}
-                                  >
-                                    Eliminate
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                  <DialogHeader>
-                                    <DialogTitle>Eliminate {eliminateEntry?.wrestlerName}</DialogTitle>
-                                  </DialogHeader>
-                                  <div className="space-y-4 py-4">
-                                    <div className="space-y-2">
-                                      <Label>Eliminated By</Label>
-                                      <Select value={eliminatedBy} onValueChange={setEliminatedBy}>
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="Select who eliminated them" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {activeWrestlers
-                                            .filter(w => w.id !== eliminateEntry?.id)
-                                            .map(w => (
-                                              <SelectItem key={w.id} value={w.wrestlerName || ""}>
-                                                {w.wrestlerName}
-                                              </SelectItem>
-                                            ))}
-                                          <SelectItem value="Self">Self Elimination</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  </div>
-                                  <DialogFooter>
-                                    <Button variant="destructive" onClick={handleEliminate} disabled={!eliminatedBy}>
-                                      Confirm Elimination
-                                    </Button>
-                                  </DialogFooter>
-                                </DialogContent>
-                              </Dialog>
-                              {activeWrestlers.length === 1 && (
-                                <Button
-                                  className="bg-yellow-500 hover:bg-yellow-600 text-black"
-                                  size="sm"
-                                  onClick={() => handleDeclareWinner(entry)}
-                                >
-                                  Declare Winner
-                                </Button>
-                              )}
-                            </div>
+                            <Badge className="bg-green-500">Active</Badge>
                           </div>
                         ))}
                     </div>
@@ -401,16 +253,35 @@ export default function AdminPage({ params }: { params: Promise<{ id: string }> 
               </Card>
 
               {/* Winner Banner */}
-              {party.status === "COMPLETED" && (
+              {winner && (
                 <Card className="bg-yellow-500/20 border-yellow-500 mb-6">
                   <CardContent className="py-8 text-center">
                     <p className="text-yellow-500 text-sm font-medium mb-2">ROYAL RUMBLE WINNER</p>
                     <p className="text-4xl font-bold text-white mb-2">
-                      {party.entries.find(e => e.isWinner)?.wrestlerName}
+                      {winner.wrestlerName}
                     </p>
                     <p className="text-gray-300">
-                      #{party.entries.find(e => e.isWinner)?.entryNumber} - {party.entries.find(e => e.isWinner)?.assignment?.participant.user.name}
+                      #{winner.entryNumber} - {getParticipantForEntry(winner.entryNumber)}
                     </p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Admin Link */}
+              {session?.user?.isAdmin && (
+                <Card className="bg-purple-500/20 border-purple-500">
+                  <CardContent className="py-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-purple-300 text-sm">You are an admin</p>
+                        <p className="text-white">Manage entries for this event in the admin panel</p>
+                      </div>
+                      <Link href={`/admin/event/${party.event.id}`}>
+                        <Button className="bg-purple-600 hover:bg-purple-700">
+                          Manage Event
+                        </Button>
+                      </Link>
+                    </div>
                   </CardContent>
                 </Card>
               )}
@@ -426,7 +297,7 @@ export default function AdminPage({ params }: { params: Promise<{ id: string }> 
                 <CardContent>
                   <div className="grid grid-cols-6 gap-2">
                     {Array.from({ length: 30 }, (_, i) => i + 1).map((num) => {
-                      const entry = party.entries.find(e => e.entryNumber === num);
+                      const entry = entries.find(e => e.entryNumber === num);
                       let bgColor = "bg-gray-700";
                       if (entry?.isWinner) bgColor = "bg-yellow-500";
                       else if (entry?.eliminatedAt) bgColor = "bg-red-500/50";
@@ -475,11 +346,49 @@ export default function AdminPage({ params }: { params: Promise<{ id: string }> 
                             <p className="text-white text-sm">
                               <span className="font-bold">#{entry.entryNumber}</span> {entry.wrestlerName}
                             </p>
-                            <p className="text-gray-400 text-xs">by {entry.eliminatedBy}</p>
+                            <p className="text-gray-400 text-xs">
+                              by {entry.eliminatedBy} ({getParticipantForEntry(entry.entryNumber)})
+                            </p>
                           </div>
                         ))}
                     </div>
                   )}
+                </CardContent>
+              </Card>
+
+              {/* Participants */}
+              <Card className="bg-gray-800/50 border-gray-700">
+                <CardHeader>
+                  <CardTitle className="text-white text-lg">
+                    Participants ({party.participants.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {party.participants.map((p) => {
+                      const participantEntries = p.assignments.map(a =>
+                        entries.find(e => e.entryNumber === a.entryNumber)
+                      );
+                      const activeCount = participantEntries.filter(
+                        e => e?.wrestlerName && !e?.eliminatedAt
+                      ).length;
+                      const hasWinner = participantEntries.some(e => e?.isWinner);
+
+                      return (
+                        <div
+                          key={p.id}
+                          className="flex justify-between items-center p-2 rounded bg-gray-700/30"
+                        >
+                          <span className="text-white">{p.user.name || p.user.email}</span>
+                          {hasWinner ? (
+                            <Badge className="bg-yellow-500">Winner!</Badge>
+                          ) : (
+                            <span className="text-gray-400 text-sm">{activeCount} active</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </CardContent>
               </Card>
             </div>

@@ -43,56 +43,24 @@ export async function POST(
     const participantIds = party.participants.map(p => p.id);
     const distribution = distributeNumbers(participantIds);
 
-    // Create entries and assignments in a transaction
+    // Create assignments in a transaction
     await prisma.$transaction(async (tx) => {
-      // Create all 30 RumbleEntry records
-      await tx.rumbleEntry.createMany({
-        data: Array.from({ length: 30 }, (_, i) => ({
-          partyId: party.id,
-          entryNumber: i + 1,
-        })),
-      });
-
-      // Get the created entries
-      const entries = await tx.rumbleEntry.findMany({
-        where: { partyId: party.id },
-      });
-
-      // Create number assignments
-      const assignments: { participantId: string; entryNumber: number }[] = [];
+      // Build all assignment data
+      const assignmentsData: { participantId: string; entryNumber: number; partyId: string }[] = [];
       distribution.forEach((numbers, participantId) => {
         numbers.forEach(num => {
-          assignments.push({ participantId, entryNumber: num });
+          assignmentsData.push({
+            participantId,
+            entryNumber: num,
+            partyId: party.id,
+          });
         });
       });
 
-      // Create assignments
-      for (const assignment of assignments) {
-        const entry = entries.find(e => e.entryNumber === assignment.entryNumber);
-        await tx.numberAssignment.create({
-          data: {
-            participantId: assignment.participantId,
-            entryNumber: assignment.entryNumber,
-            entry: entry ? { connect: { id: entry.id } } : undefined,
-          },
-        });
-
-        // Update the entry with the assignment
-        if (entry) {
-          const createdAssignment = await tx.numberAssignment.findFirst({
-            where: {
-              participantId: assignment.participantId,
-              entryNumber: assignment.entryNumber,
-            },
-          });
-          if (createdAssignment) {
-            await tx.rumbleEntry.update({
-              where: { id: entry.id },
-              data: { assignmentId: createdAssignment.id },
-            });
-          }
-        }
-      }
+      // Create all assignments at once
+      await tx.numberAssignment.createMany({
+        data: assignmentsData,
+      });
 
       // Update party status
       await tx.party.update({
