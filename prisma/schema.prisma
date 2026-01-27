@@ -12,6 +12,7 @@ model User {
   email         String    @unique
   name          String?
   password      String
+  isAdmin       Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -19,19 +20,46 @@ model User {
   participations   PartyParticipant[]
 }
 
+model RumbleEvent {
+  id          String      @id @default(cuid())
+  name        String      // "Royal Rumble 2025"
+  year        Int
+  status      EventStatus @default(NOT_STARTED)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  entries     RumbleEntry[]
+  parties     Party[]
+}
+
+enum EventStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
 model Party {
   id          String      @id @default(cuid())
   name        String
-  eventName   String      @default("Royal Rumble 2025")
   inviteCode  String      @unique
   status      PartyStatus @default(LOBBY)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
   hostId       String
-  host         User                @relation("HostedParties", fields: [hostId], references: [id])
+  host         User        @relation("HostedParties", fields: [hostId], references: [id])
+
+  eventId      String
+  event        RumbleEvent @relation(fields: [eventId], references: [id])
+
   participants PartyParticipant[]
-  entries      RumbleEntry[]
+  assignments  NumberAssignment[]
+}
+
+enum PartyStatus {
+  LOBBY
+  NUMBERS_ASSIGNED
+  COMPLETED
 }
 
 model PartyParticipant {
@@ -56,9 +84,10 @@ model NumberAssignment {
   participantId String
   participant   PartyParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
-  entry         RumbleEntry?
+  partyId     String
+  party       Party  @relation(fields: [partyId], references: [id], onDelete: Cascade)
 
-  @@unique([participantId, entryNumber])
+  @@unique([partyId, entryNumber])
 }
 
 model RumbleEntry {
@@ -70,18 +99,8 @@ model RumbleEntry {
   eliminatedBy String?   // Name of wrestler who eliminated them
   isWinner     Boolean   @default(false)
 
-  partyId      String
-  party        Party    @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  eventId      String
+  event        RumbleEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
-  assignmentId String?  @unique
-  assignment   NumberAssignment? @relation(fields: [assignmentId], references: [id])
-
-  @@unique([partyId, entryNumber])
-}
-
-enum PartyStatus {
-  LOBBY
-  NUMBERS_ASSIGNED
-  IN_PROGRESS
-  COMPLETED
+  @@unique([eventId, entryNumber])
 }
