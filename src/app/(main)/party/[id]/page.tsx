@@ -59,6 +59,7 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [leaving, setLeaving] = useState(false);
+  const [distributing, setDistributing] = useState(false);
 
   useEffect(() => {
     fetchParty();
@@ -96,6 +97,24 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
       toast.error("Failed to leave party");
     } finally {
       setLeaving(false);
+    }
+  };
+
+  const handleDistribute = async () => {
+    setDistributing(true);
+    try {
+      const res = await fetch(`/api/parties/${id}/distribute`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || "Failed to start party");
+        return;
+      }
+      toast.success("Numbers distributed! The party has started!");
+      fetchParty();
+    } catch {
+      toast.error("Failed to start party");
+    } finally {
+      setDistributing(false);
     }
   };
 
@@ -174,7 +193,23 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
             </div>
             <div className="flex items-center gap-4">
               {getStatusBadge()}
-              {party.isHost && (
+              {party.isHost && party.status === "LOBBY" && (
+                <>
+                  <Button
+                    onClick={handleDistribute}
+                    disabled={distributing || party.participants.length === 0}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    {distributing ? "Starting..." : "Start Party"}
+                  </Button>
+                  <Link href={`/party/${party.id}/admin`}>
+                    <Button variant="outline" className="bg-transparent border-purple-500 text-purple-500 hover:bg-purple-500/10">
+                      Manage Players
+                    </Button>
+                  </Link>
+                </>
+              )}
+              {party.isHost && party.status !== "LOBBY" && (
                 <Link href={`/party/${party.id}/admin`}>
                   <Button className="bg-purple-600 hover:bg-purple-700">
                     Host Controls
