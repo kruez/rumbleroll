@@ -2,8 +2,10 @@
 
 import { useEffect, useState, use } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -52,9 +54,11 @@ interface Party {
 export default function PartyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: session } = useSession();
+  const router = useRouter();
   const [party, setParty] = useState<Party | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {
     fetchParty();
@@ -74,6 +78,24 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
       setError("Failed to load party");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLeave = async () => {
+    setLeaving(true);
+    try {
+      const res = await fetch(`/api/parties/${id}/leave`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || "Failed to leave party");
+        return;
+      }
+      toast.success("You have left the party");
+      router.push("/dashboard");
+    } catch {
+      toast.error("Failed to leave party");
+    } finally {
+      setLeaving(false);
     }
   };
 
@@ -170,6 +192,16 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                     View Results
                   </Button>
                 </Link>
+              )}
+              {!party.isHost && party.status === "LOBBY" && (
+                <Button
+                  variant="outline"
+                  onClick={handleLeave}
+                  disabled={leaving}
+                  className="bg-transparent border-red-500 text-red-500 hover:bg-red-500/10"
+                >
+                  {leaving ? "Leaving..." : "Leave Party"}
+                </Button>
               )}
             </div>
           </div>
