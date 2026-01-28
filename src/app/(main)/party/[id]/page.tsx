@@ -113,7 +113,7 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
   const getStatusBadge = () => {
     switch (party.status) {
       case "LOBBY":
-        return <Badge className="bg-blue-500">Waiting for Players</Badge>;
+        return <Badge className="bg-blue-500">In Lobby</Badge>;
       case "NUMBERS_ASSIGNED":
         return <Badge className="bg-yellow-500">Numbers Assigned</Badge>;
       case "COMPLETED":
@@ -161,7 +161,7 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
               )}
               <Link href={`/party/${party.id}/tv`}>
                 <Button variant="outline" className="bg-transparent border-white text-white hover:bg-white/10">
-                  TV Display
+                  Scoreboard
                 </Button>
               </Link>
               {party.status === "COMPLETED" && (
@@ -192,7 +192,7 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
               <CardContent>
                 {party.status === "LOBBY" ? (
                   <div className="text-center py-8">
-                    <p className="text-gray-400 mb-2">Waiting for the host to distribute numbers...</p>
+                    <p className="text-gray-400 mb-2">Waiting for host to start the game...</p>
                     <p className="text-gray-500 text-sm">{party.participants.length} participant{party.participants.length !== 1 ? "s" : ""} have joined</p>
                   </div>
                 ) : myNumbers.length === 0 ? (

@@ -16,7 +16,7 @@ export default function Home() {
             </Link>
             <Link href="/register">
               <Button className="bg-purple-600 hover:bg-purple-700">
-                Get Started
+                Sign Up
               </Button>
             </Link>
           </div>

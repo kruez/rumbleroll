@@ -35,6 +35,7 @@ interface RumbleEvent {
 interface Party {
   id: string;
   name: string;
+  inviteCode: string;
   status: "LOBBY" | "NUMBERS_ASSIGNED" | "COMPLETED";
   event: RumbleEvent;
   participants: Participant[];
@@ -150,11 +151,26 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
       )}
 
       {party.status === "LOBBY" ? (
-        <div className="flex items-center justify-center h-[60vh]">
-          <div className="text-center">
-            <p className="text-4xl text-white mb-4">Waiting for players...</p>
-            <p className="text-2xl text-gray-400">{party.participants.length} joined</p>
+        <div className="flex flex-col items-center justify-center h-[60vh]">
+          <div className="text-center mb-12">
+            <p className="text-2xl text-purple-300 mb-2">Join Code</p>
+            <p className="text-8xl font-mono font-bold text-white tracking-widest">{party.inviteCode}</p>
           </div>
+
+          <div className="bg-black/30 rounded-xl p-8 max-w-2xl w-full">
+            <h2 className="text-2xl font-bold text-white mb-4 text-center">
+              Players ({party.participants.length})
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {party.participants.map((p) => (
+                <div key={p.id} className="bg-purple-500/20 border border-purple-500/50 rounded-lg p-3 text-center">
+                  <p className="text-white font-medium">{p.user.name || p.user.email.split("@")[0]}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <p className="text-xl text-gray-400 mt-8">Waiting for host to start...</p>
         </div>
       ) : (
         <div className="grid grid-cols-12 gap-6 h-[calc(100vh-180px)]">

@@ -56,6 +56,7 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
   const [party, setParty] = useState<Party | null>(null);
   const [loading, setLoading] = useState(true);
   const [distributing, setDistributing] = useState(false);
+  const [removingParticipant, setRemovingParticipant] = useState<string | null>(null);
 
   const fetchParty = useCallback(async () => {
     try {
@@ -102,6 +103,24 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
     }
   };
 
+  const handleRemoveParticipant = async (participantId: string) => {
+    setRemovingParticipant(participantId);
+    try {
+      const res = await fetch(`/api/parties/${id}/participants/${participantId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || "Failed to remove participant");
+        return;
+      }
+      toast.success("Participant removed");
+      fetchParty();
+    } catch {
+      toast.error("Failed to remove participant");
+    } finally {
+      setRemovingParticipant(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
@@ -143,7 +162,7 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
             </div>
             <Link href={`/party/${id}/tv`}>
               <Button variant="outline" className="bg-transparent border-white text-white hover:bg-white/10">
-                Open TV Display
+                Open Scoreboard
               </Button>
             </Link>
           </div>
@@ -153,29 +172,68 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
       <main className="container mx-auto px-4 py-8">
         {/* Lobby State */}
         {party.status === "LOBBY" && (
-          <Card className="bg-gray-800/50 border-gray-700 mb-8">
-            <CardHeader>
-              <CardTitle className="text-white">Ready to Start?</CardTitle>
-              <CardDescription className="text-gray-400">
-                {party.participants.length} participant{party.participants.length !== 1 ? "s" : ""} have joined.
-                Distribute numbers when everyone is ready.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-4">
-                <Button
-                  onClick={handleDistribute}
-                  disabled={distributing || party.participants.length === 0}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  {distributing ? "Distributing..." : "Distribute Numbers"}
-                </Button>
-                <p className="text-gray-400 text-sm">
-                  Each person will get {Math.floor(30 / party.participants.length)}-{Math.ceil(30 / party.participants.length)} numbers
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <>
+            <Card className="bg-gray-800/50 border-gray-700 mb-8">
+              <CardHeader>
+                <CardTitle className="text-white">Ready to Start?</CardTitle>
+                <CardDescription className="text-gray-400">
+                  {party.participants.length} participant{party.participants.length !== 1 ? "s" : ""} have joined.
+                  Distribute numbers when everyone is ready.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-4">
+                  <Button
+                    onClick={handleDistribute}
+                    disabled={distributing || party.participants.length === 0}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    {distributing ? "Distributing..." : "Distribute Numbers"}
+                  </Button>
+                  <p className="text-gray-400 text-sm">
+                    Each person will get {Math.floor(30 / party.participants.length)}-{Math.ceil(30 / party.participants.length)} numbers
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gray-800/50 border-gray-700 mb-8">
+              <CardHeader>
+                <CardTitle className="text-white">Players ({party.participants.length})</CardTitle>
+                <CardDescription className="text-gray-400">
+                  Remove players before starting the game if needed
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {party.participants.map((p) => (
+                    <div
+                      key={p.id}
+                      className="flex justify-between items-center p-3 rounded-lg bg-gray-700/30"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-white">{p.user.name || p.user.email}</span>
+                        {p.user.id === party.hostId && (
+                          <Badge variant="outline" className="text-yellow-500 border-yellow-500 text-xs">Host</Badge>
+                        )}
+                      </div>
+                      {p.user.id !== party.hostId && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveParticipant(p.id)}
+                          disabled={removingParticipant === p.id}
+                          className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                        >
+                          {removingParticipant === p.id ? "Removing..." : "Remove"}
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </>
         )}
 
         {/* Numbers Distributed but Event Not Started */}
