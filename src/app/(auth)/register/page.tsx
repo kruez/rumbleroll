@@ -71,7 +71,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
       <Header />
       <div className="flex items-center justify-center p-4 py-12">
         <Card className="w-full max-w-md bg-gray-800/50 border-gray-700">

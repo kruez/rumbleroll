@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 
@@ -24,7 +23,10 @@ export function Header({ showBackLink }: HeaderProps = {}) {
               </Link>
             )}
             <Link href={isAuthenticated ? "/dashboard" : "/"} className="flex items-center gap-2">
-              <Image src="/logo.svg" alt="RumbleRoll" width={160} height={40} priority />
+              <span className="text-2xl font-bold">
+                <span className="text-purple-400">Rumble</span>
+                <span className="text-yellow-400">Roll</span>
+              </span>
             </Link>
           </div>
 

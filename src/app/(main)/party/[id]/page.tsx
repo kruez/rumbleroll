@@ -121,7 +121,7 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
         <p className="text-white">Loading...</p>
       </div>
     );
@@ -129,7 +129,7 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
 
   if (error || !party) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
         <Card className="bg-gray-800/50 border-gray-700">
           <CardContent className="py-8 text-center">
             <p className="text-red-400 mb-4">{error || "Party not found"}</p>
@@ -181,7 +181,7 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
   const entries = party.event.entries;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
       <Header />
 
       {/* Party Header */}
