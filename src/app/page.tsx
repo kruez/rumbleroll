@@ -1,8 +1,60 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Header } from "@/components/Header";
 
 export default function Home() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const [joinDialogOpen, setJoinDialogOpen] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+  const [joinError, setJoinError] = useState("");
+
+  // Redirect logged-in users to dashboard
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.push("/dashboard");
+    }
+  }, [status, router]);
+
+  const handleJoinParty = async () => {
+    setJoinError("");
+    try {
+      const res = await fetch("/api/parties/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inviteCode: joinCode }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setJoinError(data.error);
+        return;
+      }
+
+      setJoinDialogOpen(false);
+      router.push(`/party/${data.partyId}`);
+    } catch {
+      setJoinError("Failed to join party");
+    }
+  };
+
+  // Show loading while checking auth status
+  if (status === "loading" || status === "authenticated") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+        <p className="text-white">Loading...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
       <Header />
@@ -28,11 +80,39 @@ export default function Home() {
                 Create a Party
               </Button>
             </Link>
-            <Link href="/login">
-              <Button size="lg" variant="outline" className="bg-transparent border-white text-white hover:bg-white/10 px-8 py-6 text-lg">
-                Join a Party
-              </Button>
-            </Link>
+            {session ? (
+              <Dialog open={joinDialogOpen} onOpenChange={setJoinDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="lg" variant="outline" className="bg-transparent border-white text-white hover:bg-white/10 px-8 py-6 text-lg">
+                    Join a Party
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Join a Party</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 pt-4">
+                    <Input
+                      placeholder="Enter invite code"
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                      maxLength={6}
+                      className="text-center text-2xl tracking-widest"
+                    />
+                    {joinError && <p className="text-red-500 text-sm">{joinError}</p>}
+                    <Button onClick={handleJoinParty} className="w-full">
+                      Join Party
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            ) : (
+              <Link href="/login">
+                <Button size="lg" variant="outline" className="bg-transparent border-white text-white hover:bg-white/10 px-8 py-6 text-lg">
+                  Join a Party
+                </Button>
+              </Link>
+            )}
           </div>
 
           {/* Features */}

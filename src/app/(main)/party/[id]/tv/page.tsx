@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
+import { QRCodeSVG } from "qrcode.react";
 
 interface Entry {
   id: string;
@@ -155,9 +156,19 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
 
       {party.status === "LOBBY" ? (
         <div className="flex flex-col items-center justify-center h-[60vh]">
-          <div className="text-center mb-12">
-            <p className="text-2xl text-purple-300 mb-2">Join Code</p>
-            <p className="text-8xl font-mono font-bold text-white tracking-widest">{party.inviteCode}</p>
+          <div className="text-center mb-12 flex items-center gap-12">
+            <div>
+              <p className="text-2xl text-purple-300 mb-2">Join Code</p>
+              <p className="text-8xl font-mono font-bold text-white tracking-widest">{party.inviteCode}</p>
+            </div>
+            <div className="bg-white p-4 rounded-xl">
+              <QRCodeSVG
+                value={`${typeof window !== "undefined" ? window.location.origin : ""}/join?code=${party.inviteCode}`}
+                size={180}
+                bgColor="white"
+                fgColor="black"
+              />
+            </div>
           </div>
 
           <div className="bg-black/30 rounded-xl p-8 max-w-2xl w-full">

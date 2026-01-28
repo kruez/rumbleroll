@@ -93,7 +93,7 @@ export default function DashboardPage() {
   const getStatusLabel = (status: Party["status"]) => {
     switch (status) {
       case "LOBBY":
-        return "In Lobby";
+        return "Not Started";
       case "NUMBERS_ASSIGNED":
         return "In Progress";
       case "COMPLETED":

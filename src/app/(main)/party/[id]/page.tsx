@@ -258,15 +258,15 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                 <CardTitle className="text-white">
                   {party.status === "LOBBY" ? `Welcome to ${party.name}` : "Your Numbers"}
                 </CardTitle>
+                {party.status !== "LOBBY" && (
                 <CardDescription className="text-gray-400">
                   {!isParticipant
                     ? "You're hosting but not participating in this party"
-                    : party.status === "LOBBY"
-                    ? "Waiting for the host to start the party"
                     : myNumbers.length > 0
                     ? `You have ${myNumbers.length} entry number${myNumbers.length !== 1 ? "s" : ""}`
                     : "No numbers assigned"}
                 </CardDescription>
+              )}
               </CardHeader>
               <CardContent>
                 {!isParticipant ? (
