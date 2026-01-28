@@ -2,13 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Header } from "@/components/Header";
 
 interface RumbleEvent {
   id: string;
@@ -21,6 +22,7 @@ export default function CreatePartyPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [eventId, setEventId] = useState("");
+  const [hostParticipates, setHostParticipates] = useState(true);
   const [events, setEvents] = useState<RumbleEvent[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -68,7 +70,7 @@ export default function CreatePartyPage() {
       const res = await fetch("/api/parties", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, eventId }),
+        body: JSON.stringify({ name, eventId, hostParticipates }),
       });
 
       const data = await res.json();
@@ -87,12 +89,10 @@ export default function CreatePartyPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 py-12">
-      <div className="container mx-auto px-4 max-w-md">
-        <Link href="/dashboard" className="text-gray-400 hover:text-white mb-6 inline-block">
-          &larr; Back to Dashboard
-        </Link>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
+      <Header showBackLink={{ href: "/dashboard", label: "Back to Dashboard" }} />
 
+      <div className="container mx-auto px-4 py-12 max-w-md">
         <Card className="bg-gray-800/50 border-gray-700">
           <CardHeader>
             <CardTitle className="text-2xl text-white">Create a Party</CardTitle>
@@ -145,6 +145,23 @@ export default function CreatePartyPage() {
                   </Select>
                 )}
               </div>
+
+              <div className="flex items-center space-x-3 py-2">
+                <Checkbox
+                  id="hostParticipates"
+                  checked={hostParticipates}
+                  onCheckedChange={(checked) => setHostParticipates(checked === true)}
+                  className="border-gray-600 data-[state=checked]:bg-purple-600"
+                />
+                <Label htmlFor="hostParticipates" className="text-white cursor-pointer">
+                  Include me as a player
+                </Label>
+              </div>
+              <p className="text-gray-500 text-sm -mt-4">
+                {hostParticipates
+                  ? "You'll receive entry numbers along with other players"
+                  : "You'll host the party but won't receive any entry numbers"}
+              </p>
 
               <Button
                 type="submit"

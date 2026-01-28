@@ -1,27 +1,13 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { Header } from "@/components/Header";
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
-      <div className="container mx-auto px-4 py-16">
-        {/* Header */}
-        <nav className="flex justify-between items-center mb-16">
-          <div className="text-2xl font-bold text-white">RumbleRoll</div>
-          <div className="space-x-4">
-            <Link href="/login">
-              <Button variant="ghost" className="text-white hover:text-purple-300">
-                Sign In
-              </Button>
-            </Link>
-            <Link href="/register">
-              <Button className="bg-purple-600 hover:bg-purple-700">
-                Sign Up
-              </Button>
-            </Link>
-          </div>
-        </nav>
+      <Header />
 
+      <div className="container mx-auto px-4 py-16">
         {/* Hero */}
         <main className="flex flex-col items-center text-center py-20">
           <h1 className="text-5xl md:text-7xl font-extrabold text-white mb-6 leading-tight">
@@ -54,17 +40,17 @@ export default function Home() {
             <FeatureCard
               title="Random Numbers"
               description="Fairly distribute all 30 entry numbers among your party guests"
-              icon="🎲"
+              icon="dice"
             />
             <FeatureCard
               title="Live Tracking"
               description="Watch eliminations update in real-time on your TV display"
-              icon="📺"
+              icon="tv"
             />
             <FeatureCard
               title="Leaderboard"
               description="See who's winning as wrestlers get eliminated throughout the match"
-              icon="🏆"
+              icon="trophy"
             />
           </div>
         </main>
@@ -90,9 +76,43 @@ export default function Home() {
 }
 
 function FeatureCard({ title, description, icon }: { title: string; description: string; icon: string }) {
+  const getIcon = () => {
+    switch (icon) {
+      case "dice":
+        return (
+          <svg className="w-10 h-10 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <rect x="4" y="4" width="16" height="16" rx="2" strokeWidth="2"/>
+            <circle cx="8" cy="8" r="1" fill="currentColor"/>
+            <circle cx="12" cy="12" r="1" fill="currentColor"/>
+            <circle cx="16" cy="16" r="1" fill="currentColor"/>
+          </svg>
+        );
+      case "tv":
+        return (
+          <svg className="w-10 h-10 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <rect x="2" y="4" width="20" height="14" rx="2" strokeWidth="2"/>
+            <path d="M8 21h8" strokeWidth="2" strokeLinecap="round"/>
+            <path d="M12 18v3" strokeWidth="2"/>
+          </svg>
+        );
+      case "trophy":
+        return (
+          <svg className="w-10 h-10 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M6 9H3a1 1 0 00-1 1v2a4 4 0 004 4h0" strokeWidth="2"/>
+            <path d="M18 9h3a1 1 0 011 1v2a4 4 0 01-4 4h0" strokeWidth="2"/>
+            <path d="M6 3h12v10a6 6 0 11-12 0V3z" strokeWidth="2"/>
+            <path d="M9 21h6" strokeWidth="2" strokeLinecap="round"/>
+            <path d="M12 17v4" strokeWidth="2"/>
+          </svg>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="bg-white/5 backdrop-blur rounded-xl p-6 border border-white/10">
-      <div className="text-4xl mb-4">{icon}</div>
+      <div className="mb-4 flex justify-center">{getIcon()}</div>
       <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
       <p className="text-gray-400">{description}</p>
     </div>

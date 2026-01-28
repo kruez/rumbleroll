@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Header } from "@/components/Header";
 
 interface RumbleEvent {
   id: string;
@@ -102,27 +103,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
-      {/* Header */}
-      <header className="border-b border-gray-700 bg-gray-900/50 backdrop-blur">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link href="/dashboard" className="text-2xl font-bold text-white">
-            RumbleRoll
-          </Link>
-          <div className="flex items-center gap-4">
-            {session?.user?.isAdmin && (
-              <Link href="/admin">
-                <Button variant="ghost" className="text-yellow-400 hover:text-yellow-300">
-                  Admin
-                </Button>
-              </Link>
-            )}
-            <span className="text-gray-300">{session?.user?.name || session?.user?.email}</span>
-            <Button variant="ghost" onClick={() => signOut()} className="text-gray-300">
-              Sign Out
-            </Button>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       <main className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">

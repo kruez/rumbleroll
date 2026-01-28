@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Header } from "@/components/Header";
 
 interface Entry {
   id: string;
@@ -144,6 +145,7 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
   // Find current user's participant record
   const myParticipant = party.participants.find(p => p.user.id === session?.user?.id);
   const myAssignments = myParticipant?.assignments || [];
+  const isParticipant = !!myParticipant;
 
   // Get entry data for each assignment
   const myNumbers = myAssignments.map(a => {
@@ -180,8 +182,10 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
-      {/* Header */}
-      <header className="border-b border-gray-700 bg-gray-900/50 backdrop-blur sticky top-0 z-10">
+      <Header />
+
+      {/* Party Header */}
+      <div className="border-b border-gray-700 bg-gray-900/30">
         <div className="container mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
             <div>
@@ -241,7 +245,7 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
             </div>
           </div>
         </div>
-      </header>
+      </div>
 
       <main className="container mx-auto px-4 py-8">
         <div className="grid lg:grid-cols-3 gap-8">
@@ -251,13 +255,20 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
               <CardHeader>
                 <CardTitle className="text-white">Your Numbers</CardTitle>
                 <CardDescription className="text-gray-400">
-                  {myNumbers.length > 0
+                  {!isParticipant
+                    ? "You're hosting but not participating in this party"
+                    : myNumbers.length > 0
                     ? `You have ${myNumbers.length} entry number${myNumbers.length !== 1 ? "s" : ""}`
                     : "Numbers haven't been assigned yet"}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {party.status === "LOBBY" ? (
+                {!isParticipant ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-400 mb-2">You opted out of participating when creating this party.</p>
+                    <p className="text-gray-500 text-sm">You can still manage the party and track progress.</p>
+                  </div>
+                ) : party.status === "LOBBY" ? (
                   <div className="text-center py-8">
                     <p className="text-gray-400 mb-2">Waiting for host to start the game...</p>
                     <p className="text-gray-500 text-sm">{party.participants.length} participant{party.participants.length !== 1 ? "s" : ""} have joined</p>

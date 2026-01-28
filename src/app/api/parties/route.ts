@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { name, eventId } = await request.json();
+    const { name, eventId, hostParticipates = true } = await request.json();
 
     if (!name) {
       return NextResponse.json({ error: "Party name is required" }, { status: 400 });
@@ -81,11 +81,14 @@ export async function POST(request: Request) {
         inviteCode,
         hostId: session.user.id,
         eventId,
-        participants: {
-          create: {
-            userId: session.user.id,
+        // Only create participant record if host wants to participate
+        ...(hostParticipates && {
+          participants: {
+            create: {
+              userId: session.user.id,
+            },
           },
-        },
+        }),
       },
       include: {
         host: { select: { id: true, name: true, email: true } },

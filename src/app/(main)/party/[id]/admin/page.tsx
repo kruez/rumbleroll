@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { Header } from "@/components/Header";
 
 interface Entry {
   id: string;
@@ -55,7 +56,6 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
   const router = useRouter();
   const [party, setParty] = useState<Party | null>(null);
   const [loading, setLoading] = useState(true);
-  const [distributing, setDistributing] = useState(false);
   const [removingParticipant, setRemovingParticipant] = useState<string | null>(null);
 
   const fetchParty = useCallback(async () => {
@@ -84,24 +84,6 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
     const interval = setInterval(fetchParty, 5000);
     return () => clearInterval(interval);
   }, [fetchParty]);
-
-  const handleDistribute = async () => {
-    setDistributing(true);
-    try {
-      const res = await fetch(`/api/parties/${id}/distribute`, { method: "POST" });
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error || "Failed to distribute numbers");
-        return;
-      }
-      toast.success("Numbers distributed successfully!");
-      fetchParty();
-    } catch {
-      toast.error("Failed to distribute numbers");
-    } finally {
-      setDistributing(false);
-    }
-  };
 
   const handleRemoveParticipant = async (participantId: string) => {
     setRemovingParticipant(participantId);
@@ -149,8 +131,10 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
-      {/* Header */}
-      <header className="border-b border-gray-700 bg-gray-900/50 backdrop-blur sticky top-0 z-10">
+      <Header />
+
+      {/* Page Header */}
+      <div className="border-b border-gray-700 bg-gray-900/30">
         <div className="container mx-auto px-4 py-4">
           <div className="flex justify-between items-center">
             <div>
@@ -167,73 +151,48 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
             </Link>
           </div>
         </div>
-      </header>
+      </div>
 
       <main className="container mx-auto px-4 py-8">
-        {/* Lobby State */}
+        {/* Lobby State - Just the Players card, no Distribute Numbers card */}
         {party.status === "LOBBY" && (
-          <>
-            <Card className="bg-gray-800/50 border-gray-700 mb-8">
-              <CardHeader>
-                <CardTitle className="text-white">Ready to Start?</CardTitle>
-                <CardDescription className="text-gray-400">
-                  {party.participants.length} participant{party.participants.length !== 1 ? "s" : ""} have joined.
-                  Distribute numbers when everyone is ready.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-4">
-                  <Button
-                    onClick={handleDistribute}
-                    disabled={distributing || party.participants.length === 0}
-                    className="bg-green-600 hover:bg-green-700"
+          <Card className="bg-gray-800/50 border-gray-700 mb-8">
+            <CardHeader>
+              <CardTitle className="text-white">Players ({party.participants.length})</CardTitle>
+              <CardDescription className="text-gray-400">
+                Remove players before starting the game if needed.
+                Each person will get {Math.floor(30 / party.participants.length)}-{Math.ceil(30 / party.participants.length)} numbers.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {party.participants.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex justify-between items-center p-3 rounded-lg bg-gray-700/30"
                   >
-                    {distributing ? "Distributing..." : "Distribute Numbers"}
-                  </Button>
-                  <p className="text-gray-400 text-sm">
-                    Each person will get {Math.floor(30 / party.participants.length)}-{Math.ceil(30 / party.participants.length)} numbers
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gray-800/50 border-gray-700 mb-8">
-              <CardHeader>
-                <CardTitle className="text-white">Players ({party.participants.length})</CardTitle>
-                <CardDescription className="text-gray-400">
-                  Remove players before starting the game if needed
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {party.participants.map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex justify-between items-center p-3 rounded-lg bg-gray-700/30"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-white">{p.user.name || p.user.email}</span>
-                        {p.user.id === party.hostId && (
-                          <Badge variant="outline" className="text-yellow-500 border-yellow-500 text-xs">Host</Badge>
-                        )}
-                      </div>
-                      {p.user.id !== party.hostId && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRemoveParticipant(p.id)}
-                          disabled={removingParticipant === p.id}
-                          className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                        >
-                          {removingParticipant === p.id ? "Removing..." : "Remove"}
-                        </Button>
+                    <div className="flex items-center gap-2">
+                      <span className="text-white">{p.user.name || p.user.email}</span>
+                      {p.user.id === party.hostId && (
+                        <Badge variant="outline" className="text-yellow-500 border-yellow-500 text-xs">Host</Badge>
                       )}
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </>
+                    {p.user.id !== party.hostId && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveParticipant(p.id)}
+                        disabled={removingParticipant === p.id}
+                        className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                      >
+                        {removingParticipant === p.id ? "Removing..." : "Remove"}
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* Numbers Distributed but Event Not Started */}

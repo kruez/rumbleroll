@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 48" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7c3aed"/>
+      <stop offset="100%" style="stop-color:#9333ea"/>
+    </linearGradient>
+    <linearGradient id="diceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fbbf24"/>
+      <stop offset="100%" style="stop-color:#f59e0b"/>
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ffffff"/>
+      <stop offset="100%" style="stop-color:#e5e7eb"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Icon -->
+  <g transform="translate(2, 2)">
+    <!-- Main circle -->
+    <circle cx="22" cy="22" r="20" fill="url(#bgGrad)"/>
+
+    <!-- Wrestling ring ropes (stylized) -->
+    <path d="M8 16 H36" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M8 22 H36" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/>
+    <path d="M8 28 H36" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/>
+
+    <!-- Dice in center -->
+    <rect x="14" y="14" width="16" height="16" rx="2" fill="url(#diceGrad)" transform="rotate(15, 22, 22)"/>
+
+    <!-- Dice dots -->
+    <circle cx="18" cy="18" r="1.5" fill="#7c3aed" transform="rotate(15, 22, 22)"/>
+    <circle cx="22" cy="22" r="1.5" fill="#7c3aed" transform="rotate(15, 22, 22)"/>
+    <circle cx="26" cy="26" r="1.5" fill="#7c3aed" transform="rotate(15, 22, 22)"/>
+  </g>
+
+  <!-- Text: RumbleRoll -->
+  <text x="54" y="32" font-family="system-ui, -apple-system, sans-serif" font-size="24" font-weight="700" fill="white">
+    Rumble<tspan fill="#fbbf24">Roll</tspan>
+  </text>
+</svg>
