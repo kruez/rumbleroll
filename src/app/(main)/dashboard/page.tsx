@@ -84,7 +84,7 @@ export default function DashboardPage() {
       case "LOBBY":
         return "bg-blue-500";
       case "NUMBERS_ASSIGNED":
-        return "bg-yellow-500";
+        return "bg-green-500";
       case "COMPLETED":
         return "bg-gray-500";
     }
@@ -93,9 +93,9 @@ export default function DashboardPage() {
   const getStatusLabel = (status: Party["status"]) => {
     switch (status) {
       case "LOBBY":
-        return "Waiting";
+        return "In Lobby";
       case "NUMBERS_ASSIGNED":
-        return "Ready";
+        return "In Progress";
       case "COMPLETED":
         return "Finished";
     }

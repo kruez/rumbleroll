@@ -88,17 +88,20 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
   // Calculate standings
   const standings = party.participants
     .map((p) => {
-      const activeCount = p.assignments.filter((a) => {
-        const entry = entries.find(e => e.entryNumber === a.entryNumber);
-        return entry?.wrestlerName && !entry?.eliminatedAt;
-      }).length;
-      const hasWinner = p.assignments.some((a) => {
-        const entry = entries.find(e => e.entryNumber === a.entryNumber);
-        return entry?.isWinner;
-      });
+      const participantEntries = p.assignments.map((a) =>
+        entries.find(e => e.entryNumber === a.entryNumber)
+      );
+      const waitingCount = participantEntries.filter(e => !e?.wrestlerName).length;
+      const activeCount = participantEntries.filter(
+        e => e?.wrestlerName && !e?.eliminatedAt && !e?.isWinner
+      ).length;
+      const eliminatedCount = participantEntries.filter(e => e?.eliminatedAt).length;
+      const hasWinner = participantEntries.some(e => e?.isWinner);
       return {
         ...p,
+        waitingCount,
         activeCount,
+        eliminatedCount,
         hasWinner,
         displayName: p.user.name || p.user.email.split("@")[0],
       };
@@ -210,6 +213,9 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
                           </Badge>
                         ))}
                       </div>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {p.waitingCount} waiting | {p.activeCount} active | {p.eliminatedCount} eliminated
+                      </p>
                     </div>
                     <div className="text-right">
                       {p.hasWinner ? (

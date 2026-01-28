@@ -103,13 +103,12 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
   };
 
   const handleEliminate = async (entryNumber: number) => {
-    if (!eliminatedByInput.trim()) return;
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/events/${id}/entries`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entryNumber, eliminatedBy: eliminatedByInput }),
+        body: JSON.stringify({ entryNumber, eliminatedBy: eliminatedByInput.trim() || null }),
       });
       if (res.ok) {
         setEditingEntry(null);
@@ -325,7 +324,7 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
                     ) : !entry.eliminatedAt && !entry.isWinner ? (
                       <div className="flex gap-2">
                         <Input
-                          placeholder="Eliminated by..."
+                          placeholder="Eliminated by... (optional)"
                           value={editingEntry === entry.entryNumber ? eliminatedByInput : ""}
                           onChange={(e) => {
                             setEditingEntry(entry.entryNumber);
@@ -336,8 +335,11 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => handleEliminate(entry.entryNumber)}
-                          disabled={saving || editingEntry !== entry.entryNumber}
+                          onClick={() => {
+                            setEditingEntry(entry.entryNumber);
+                            handleEliminate(entry.entryNumber);
+                          }}
+                          disabled={saving}
                         >
                           Eliminate
                         </Button>

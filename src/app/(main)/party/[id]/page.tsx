@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use, useCallback } from "react";
+import { useEffect, useState, use, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -61,6 +61,8 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
   const [error, setError] = useState("");
   const [leaving, setLeaving] = useState(false);
   const [distributing, setDistributing] = useState(false);
+  const [showStartMessage, setShowStartMessage] = useState(false);
+  const prevStatus = useRef<Party["status"] | undefined>(undefined);
 
   const fetchParty = useCallback(async () => {
     try {
@@ -84,6 +86,16 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
     const interval = setInterval(fetchParty, 5000);
     return () => clearInterval(interval);
   }, [fetchParty]);
+
+  // Detect transition from LOBBY to NUMBERS_ASSIGNED to show celebration message
+  useEffect(() => {
+    if (prevStatus.current === "LOBBY" && party?.status === "NUMBERS_ASSIGNED") {
+      setShowStartMessage(true);
+      const timer = setTimeout(() => setShowStartMessage(false), 3000);
+      return () => clearTimeout(timer);
+    }
+    prevStatus.current = party?.status;
+  }, [party?.status]);
 
   const handleLeave = async () => {
     setLeaving(true);
@@ -243,13 +255,17 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
           <div className="lg:col-span-2">
             <Card className="bg-gray-800/50 border-gray-700">
               <CardHeader>
-                <CardTitle className="text-white">Your Numbers</CardTitle>
+                <CardTitle className="text-white">
+                  {party.status === "LOBBY" ? `Welcome to ${party.name}` : "Your Numbers"}
+                </CardTitle>
                 <CardDescription className="text-gray-400">
                   {!isParticipant
                     ? "You're hosting but not participating in this party"
+                    : party.status === "LOBBY"
+                    ? "Waiting for the host to start the party"
                     : myNumbers.length > 0
                     ? `You have ${myNumbers.length} entry number${myNumbers.length !== 1 ? "s" : ""}`
-                    : "Waiting for the host to start the party"}
+                    : "No numbers assigned"}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -257,6 +273,12 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                   <div className="text-center py-8">
                     <p className="text-gray-400 mb-2">You opted out of participating when creating this party.</p>
                     <p className="text-gray-500 text-sm">You can still manage the party and track progress.</p>
+                  </div>
+                ) : showStartMessage ? (
+                  <div className="text-center py-12">
+                    <p className="text-4xl font-black text-yellow-400 animate-pulse">
+                      LET&apos;S GET READY TO RUMBLE!
+                    </p>
                   </div>
                 ) : party.status === "LOBBY" ? (
                   <div className="text-center py-8">
