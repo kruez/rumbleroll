@@ -259,7 +259,7 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                     ? "You're hosting but not participating in this party"
                     : myNumbers.length > 0
                     ? `You have ${myNumbers.length} entry number${myNumbers.length !== 1 ? "s" : ""}`
-                    : "Numbers haven't been assigned yet"}
+                    : "Waiting for the host to start the party"}
                 </CardDescription>
               </CardHeader>
               <CardContent>

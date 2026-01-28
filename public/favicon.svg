@@ -1,0 +1,20 @@
+<svg width="32" height="32" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#9333ea"/>
+    </linearGradient>
+    <linearGradient id="diceGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+  <circle cx="22" cy="22" r="20" fill="url(#bgGrad)"/>
+  <path d="M8 16 H36" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M8 22 H36" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M8 28 H36" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"/>
+  <rect x="14" y="14" width="16" height="16" rx="2" fill="url(#diceGrad)" transform="rotate(15, 22, 22)"/>
+  <circle cx="18" cy="18" r="1.5" fill="#7c3aed" transform="rotate(15, 22, 22)"/>
+  <circle cx="22" cy="22" r="1.5" fill="#7c3aed" transform="rotate(15, 22, 22)"/>
+  <circle cx="26" cy="26" r="1.5" fill="#7c3aed" transform="rotate(15, 22, 22)"/>
+</svg>
