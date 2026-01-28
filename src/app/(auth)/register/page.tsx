@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,8 @@ import { Header } from "@/components/Header";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -58,9 +60,9 @@ export default function RegisterPage() {
       });
 
       if (signInResult?.error) {
-        router.push("/login");
+        router.push(callbackUrl ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : "/login");
       } else {
-        router.push("/dashboard");
+        router.push(callbackUrl || "/dashboard");
         router.refresh();
       }
     } catch {
@@ -141,7 +143,10 @@ export default function RegisterPage() {
               </Button>
               <p className="text-sm text-gray-400 text-center">
                 Already have an account?{" "}
-                <Link href="/login" className="text-purple-400 hover:underline">
+                <Link
+                  href={callbackUrl ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}` : "/login"}
+                  className="text-purple-400 hover:underline"
+                >
                   Sign in
                 </Link>
               </p>
