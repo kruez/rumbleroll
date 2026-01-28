@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Header } from "@/components/Header";
 
 interface RumbleEntry {
   id: string;
@@ -142,7 +143,7 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
 
   if (status === "loading" || loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
         <p className="text-white">Loading...</p>
       </div>
     );
@@ -159,8 +160,11 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
   const nextEntry = event.entries.find((e) => !e.wrestlerName);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
-      <header className="border-b border-gray-700 bg-gray-900/50 backdrop-blur sticky top-0 z-10">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+      <Header />
+
+      {/* Page Header */}
+      <div className="border-b border-gray-700 bg-gray-900/30">
         <div className="container mx-auto px-4 py-4">
           <Link href="/admin" className="text-gray-400 hover:text-white text-sm">
             &larr; Back to Events
@@ -184,7 +188,7 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
             </div>
           </div>
         </div>
-      </header>
+      </div>
 
       <main className="container mx-auto px-4 py-8">
         {/* Stats */}

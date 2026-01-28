@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Header } from "@/components/Header";
 
 interface RumbleEvent {
   id: string;
@@ -87,7 +88,7 @@ export default function AdminPage() {
 
   if (status === "loading" || loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
         <p className="text-white">Loading...</p>
       </div>
     );
@@ -98,17 +99,18 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800">
-      <header className="border-b border-gray-700 bg-gray-900/50 backdrop-blur">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div>
-            <Link href="/dashboard" className="text-gray-400 hover:text-white text-sm">
-              &larr; Dashboard
-            </Link>
-            <h1 className="text-2xl font-bold text-white">Admin Panel</h1>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+      <Header />
+
+      {/* Page Header */}
+      <div className="border-b border-gray-700 bg-gray-900/30">
+        <div className="container mx-auto px-4 py-4">
+          <Link href="/dashboard" className="text-gray-400 hover:text-white text-sm">
+            &larr; Dashboard
+          </Link>
+          <h1 className="text-2xl font-bold text-white">Admin Panel</h1>
         </div>
-      </header>
+      </div>
 
       <main className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
