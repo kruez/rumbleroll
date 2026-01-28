@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, use, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -62,11 +62,7 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
   const [leaving, setLeaving] = useState(false);
   const [distributing, setDistributing] = useState(false);
 
-  useEffect(() => {
-    fetchParty();
-  }, [id]);
-
-  const fetchParty = async () => {
+  const fetchParty = useCallback(async () => {
     try {
       const res = await fetch(`/api/parties/${id}`);
       if (!res.ok) {
@@ -81,7 +77,13 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    fetchParty();
+    const interval = setInterval(fetchParty, 5000);
+    return () => clearInterval(interval);
+  }, [fetchParty]);
 
   const handleLeave = async () => {
     setLeaving(true);
@@ -153,17 +155,6 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
     return { ...a, entry };
   });
 
-  const getStatusBadge = () => {
-    switch (party.status) {
-      case "LOBBY":
-        return <Badge className="bg-blue-500">In Lobby</Badge>;
-      case "NUMBERS_ASSIGNED":
-        return <Badge className="bg-yellow-500">Numbers Assigned</Badge>;
-      case "COMPLETED":
-        return <Badge className="bg-gray-500">Completed</Badge>;
-    }
-  };
-
   const getEntryStatus = (entry: Entry | undefined) => {
     if (!entry?.wrestlerName) {
       return { status: "waiting", label: "Not yet entered", color: "bg-gray-600" };
@@ -196,7 +187,6 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
               <p className="text-gray-400">{party.event.name}</p>
             </div>
             <div className="flex items-center gap-4">
-              {getStatusBadge()}
               {party.isHost && party.status === "LOBBY" && (
                 <>
                   <Button
