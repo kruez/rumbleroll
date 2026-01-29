@@ -26,7 +26,7 @@ export async function GET(
         },
         participants: {
           include: {
-            user: { select: { id: true, name: true, email: true, venmoHandle: true, cashAppHandle: true } },
+            user: { select: { id: true, name: true, email: true, venmoHandle: true, cashAppHandle: true, profileImageUrl: true } },
           },
         },
         assignments: true,

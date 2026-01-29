@@ -38,6 +38,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: user.email,
           name: user.name,
           isAdmin: user.isAdmin,
+          profileImageUrl: user.profileImageUrl || undefined,
         };
       },
     }),
@@ -53,6 +54,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.id = user.id as string;
         token.isAdmin = user.isAdmin;
+        token.profileImageUrl = user.profileImageUrl;
       }
       return token;
     },
@@ -60,6 +62,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string;
         session.user.isAdmin = token.isAdmin as boolean;
+        session.user.profileImageUrl = token.profileImageUrl as string | undefined;
       }
       return session;
     },

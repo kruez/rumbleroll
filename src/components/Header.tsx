@@ -75,7 +75,7 @@ export function Header({ showBackLink }: HeaderProps = {}) {
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-2 hover:opacity-80 transition-opacity">
                       <Avatar size="sm">
-                        <AvatarImage src={session?.user?.image || undefined} alt={session?.user?.name || "User"} />
+                        <AvatarImage src={session?.user?.profileImageUrl || undefined} alt={session?.user?.name || "User"} />
                         <AvatarFallback className="bg-purple-600 text-white text-xs">
                           {session?.user?.name
                             ? session.user.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)

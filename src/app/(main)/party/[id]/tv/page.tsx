@@ -3,6 +3,7 @@
 import { useEffect, useState, use, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
 import { QRCodeSVG } from "qrcode.react";
+import { UserAvatar } from "@/components/UserAvatar";
 
 interface Entry {
   id: string;
@@ -21,7 +22,7 @@ interface Assignment {
 
 interface Participant {
   id: string;
-  user: { id: string; name: string | null; email: string };
+  user: { id: string; name: string | null; email: string; profileImageUrl?: string | null };
   assignments: Assignment[];
 }
 
@@ -143,13 +144,71 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
 
       {/* Winner Celebration */}
       {winner && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 animate-pulse">
-          <div className="text-center">
-            <p className="text-yellow-400 text-2xl mb-4">ROYAL RUMBLE WINNER</p>
-            <p className="text-8xl font-black text-white mb-4">{winner.wrestlerName}</p>
-            <p className="text-3xl text-yellow-400">
-              #{winner.entryNumber} - {getParticipantForEntry(winner.entryNumber)}
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 overflow-hidden">
+          {/* Spotlight effect */}
+          <div className="absolute inset-0 bg-gradient-radial from-yellow-500/30 via-transparent to-transparent animate-pulse" />
+
+          {/* Animated sparkles */}
+          <div className="absolute inset-0 overflow-hidden">
+            {[...Array(20)].map((_, i) => (
+              <div
+                key={i}
+                className="absolute w-2 h-2 bg-yellow-400 rounded-full animate-bounce"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                  animationDelay: `${Math.random() * 2}s`,
+                  animationDuration: `${1 + Math.random()}s`,
+                }}
+              />
+            ))}
+          </div>
+
+          <div className="text-center relative z-10 animate-[fadeIn_1s_ease-out]">
+            {/* Championship Belt SVG */}
+            <div className="mb-8 flex justify-center">
+              <svg viewBox="0 0 200 120" className="w-64 h-40 drop-shadow-[0_0_30px_rgba(234,179,8,0.8)]">
+                {/* Main belt plate */}
+                <ellipse cx="100" cy="60" rx="85" ry="45" fill="url(#beltGold)" stroke="#B8860B" strokeWidth="3"/>
+                {/* Inner decoration */}
+                <ellipse cx="100" cy="60" rx="65" ry="32" fill="none" stroke="#B8860B" strokeWidth="2"/>
+                <ellipse cx="100" cy="60" rx="50" ry="25" fill="url(#beltInner)" stroke="#FFD700" strokeWidth="1"/>
+                {/* Center gem */}
+                <circle cx="100" cy="60" r="15" fill="#DC143C" stroke="#FFD700" strokeWidth="2"/>
+                <circle cx="100" cy="60" r="8" fill="#FF6B6B" opacity="0.6"/>
+                {/* Side plates */}
+                <rect x="10" y="40" width="25" height="40" rx="5" fill="url(#beltGold)" stroke="#B8860B" strokeWidth="2"/>
+                <rect x="165" y="40" width="25" height="40" rx="5" fill="url(#beltGold)" stroke="#B8860B" strokeWidth="2"/>
+                {/* Stars */}
+                <polygon points="50,55 52,61 58,61 53,65 55,71 50,67 45,71 47,65 42,61 48,61" fill="#FFD700"/>
+                <polygon points="150,55 152,61 158,61 153,65 155,71 150,67 145,71 147,65 142,61 148,61" fill="#FFD700"/>
+                {/* Crown on top */}
+                <path d="M75,25 L80,35 L90,30 L100,40 L110,30 L120,35 L125,25 L120,45 L80,45 Z" fill="url(#beltGold)" stroke="#B8860B" strokeWidth="1"/>
+                <defs>
+                  <linearGradient id="beltGold" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#FFD700"/>
+                    <stop offset="50%" stopColor="#FFA500"/>
+                    <stop offset="100%" stopColor="#FFD700"/>
+                  </linearGradient>
+                  <linearGradient id="beltInner" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor="#2D2D2D"/>
+                    <stop offset="100%" stopColor="#1A1A1A"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+
+            <p className="text-yellow-400 text-3xl font-bold mb-4 tracking-widest animate-pulse">
+              ROYAL RUMBLE WINNER
             </p>
+            <p className="text-8xl font-black text-white mb-6 drop-shadow-[0_0_20px_rgba(255,255,255,0.5)] animate-[scaleIn_0.5s_ease-out]">
+              {winner.wrestlerName}
+            </p>
+            <div className="flex items-center justify-center gap-4">
+              <span className="text-4xl font-bold text-yellow-300">#{winner.entryNumber}</span>
+              <span className="text-3xl text-white">-</span>
+              <span className="text-3xl text-yellow-400 font-bold">{getParticipantForEntry(winner.entryNumber)}</span>
+            </div>
           </div>
         </div>
       )}
@@ -177,7 +236,13 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
             </h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {party.participants.map((p) => (
-                <div key={p.id} className="bg-purple-500/20 border border-purple-500/50 rounded-lg p-3 text-center">
+                <div key={p.id} className="bg-purple-500/20 border border-purple-500/50 rounded-lg p-3 flex items-center justify-center gap-2">
+                  <UserAvatar
+                    name={p.user.name}
+                    email={p.user.email}
+                    profileImageUrl={p.user.profileImageUrl}
+                    size="sm"
+                  />
                   <p className="text-white font-medium">{p.user.name || p.user.email.split("@")[0]}</p>
                 </div>
               ))}
@@ -215,6 +280,12 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
                     }`}
                   >
                     <span className="text-2xl font-bold text-white w-8">{idx + 1}</span>
+                    <UserAvatar
+                      name={p.user.name}
+                      email={p.user.email}
+                      profileImageUrl={p.user.profileImageUrl}
+                      size="sm"
+                    />
                     <div className="flex-1">
                       <p className="text-white font-bold text-lg">{p.displayName}</p>
                       <div className="flex gap-1 flex-wrap">

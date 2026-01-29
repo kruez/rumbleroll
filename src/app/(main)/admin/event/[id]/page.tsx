@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Header } from "@/components/Header";
 
 interface RumbleEntry {
@@ -40,6 +39,9 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
   const [wrestlerInput, setWrestlerInput] = useState("");
   const [eliminatedByInput, setEliminatedByInput] = useState("");
   const [saving, setSaving] = useState(false);
+  const [testModeOpen, setTestModeOpen] = useState(false);
+  const [testModeLoading, setTestModeLoading] = useState(false);
+  const [simulatingEliminations, setSimulatingEliminations] = useState(false);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -140,6 +142,53 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
     }
   };
 
+  const handleTestAction = async (action: "fill" | "eliminate" | "reset") => {
+    setTestModeLoading(true);
+    try {
+      const res = await fetch(`/api/admin/events/${id}/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (res.ok) {
+        fetchEvent();
+      }
+    } catch (error) {
+      console.error("Test mode action failed:", error);
+    } finally {
+      setTestModeLoading(false);
+    }
+  };
+
+  const simulateEliminations = async () => {
+    setSimulatingEliminations(true);
+    const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    // Keep eliminating until there's a winner or error
+    let shouldContinue = true;
+    while (shouldContinue) {
+      try {
+        const res = await fetch(`/api/admin/events/${id}/test`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "eliminate" }),
+        });
+        const data = await res.json();
+
+        if (!res.ok || data.winner) {
+          shouldContinue = false;
+        }
+
+        fetchEvent();
+        await delay(1000); // 1 second between eliminations
+      } catch {
+        shouldContinue = false;
+      }
+    }
+
+    setSimulatingEliminations(false);
+  };
+
   if (status === "loading" || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
@@ -173,17 +222,30 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
               <h1 className="text-2xl font-bold text-white">{event.name}</h1>
               <p className="text-gray-400">{event._count.parties} parties using this event</p>
             </div>
-            <div className="flex items-center gap-4">
-              <Select value={event.status} onValueChange={handleUpdateStatus}>
-                <SelectTrigger className="w-40 bg-gray-800 border-gray-600 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="NOT_STARTED">Not Started</SelectItem>
-                  <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
-                  <SelectItem value="COMPLETED">Completed</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={event.status === "NOT_STARTED" ? "default" : "outline"}
+                onClick={() => handleUpdateStatus("NOT_STARTED")}
+                disabled={event.status !== "NOT_STARTED"}
+                className={event.status === "NOT_STARTED" ? "bg-gray-600" : "bg-transparent border-gray-500 text-gray-300"}
+              >
+                Not Started
+              </Button>
+              <Button
+                variant={event.status === "IN_PROGRESS" ? "default" : "outline"}
+                onClick={() => handleUpdateStatus("IN_PROGRESS")}
+                disabled={event.status === "COMPLETED"}
+                className={event.status === "IN_PROGRESS" ? "bg-green-600 hover:bg-green-700" : "bg-transparent border-green-500 text-green-400 hover:bg-green-500/10"}
+              >
+                {event.status === "NOT_STARTED" ? "Start Event" : "In Progress"}
+              </Button>
+              <Button
+                variant={event.status === "COMPLETED" ? "default" : "outline"}
+                disabled={!winner}
+                className={event.status === "COMPLETED" ? "bg-yellow-600" : "bg-transparent border-yellow-500 text-yellow-400"}
+              >
+                Completed
+              </Button>
             </div>
           </div>
         </div>
@@ -210,7 +272,7 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
               <div className="text-gray-400 text-sm">Eliminated</div>
             </CardContent>
           </Card>
-          <Card className="bg-gray-800/50 border-gray-700">
+          <Card className={`border-gray-700 ${winner ? "bg-yellow-500/20 border-yellow-500" : "bg-gray-800/50"}`}>
             <CardContent className="py-4 text-center">
               {winner ? (
                 <>
@@ -227,8 +289,43 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
           </Card>
         </div>
 
+        {/* Winner Celebration Banner */}
+        {winner && (
+          <Card className="bg-gradient-to-r from-yellow-900/50 via-yellow-600/30 to-yellow-900/50 border-yellow-500 mb-8 overflow-hidden">
+            <CardContent className="py-8 relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-500/10 to-transparent animate-pulse" />
+              <div className="text-center relative z-10">
+                {/* Small Championship Belt */}
+                <div className="flex justify-center mb-4">
+                  <svg viewBox="0 0 200 120" className="w-32 h-20 drop-shadow-[0_0_15px_rgba(234,179,8,0.6)]">
+                    <ellipse cx="100" cy="60" rx="85" ry="45" fill="url(#adminBeltGold)" stroke="#B8860B" strokeWidth="3"/>
+                    <ellipse cx="100" cy="60" rx="50" ry="25" fill="url(#adminBeltInner)" stroke="#FFD700" strokeWidth="1"/>
+                    <circle cx="100" cy="60" r="15" fill="#DC143C" stroke="#FFD700" strokeWidth="2"/>
+                    <rect x="10" y="40" width="25" height="40" rx="5" fill="url(#adminBeltGold)" stroke="#B8860B" strokeWidth="2"/>
+                    <rect x="165" y="40" width="25" height="40" rx="5" fill="url(#adminBeltGold)" stroke="#B8860B" strokeWidth="2"/>
+                    <defs>
+                      <linearGradient id="adminBeltGold" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#FFD700"/>
+                        <stop offset="50%" stopColor="#FFA500"/>
+                        <stop offset="100%" stopColor="#FFD700"/>
+                      </linearGradient>
+                      <linearGradient id="adminBeltInner" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stopColor="#2D2D2D"/>
+                        <stop offset="100%" stopColor="#1A1A1A"/>
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                </div>
+                <p className="text-yellow-400 text-sm font-bold tracking-widest mb-2">ROYAL RUMBLE WINNER</p>
+                <p className="text-4xl font-black text-white mb-2">{winner.wrestlerName}</p>
+                <p className="text-yellow-300 text-lg">Entry #{winner.entryNumber}</p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Quick Entry for Next Wrestler */}
-        {nextEntry && !winner && (
+        {nextEntry && !winner && event.status === "IN_PROGRESS" && (
           <Card className="bg-purple-900/30 border-purple-500 mb-8">
             <CardHeader>
               <CardTitle className="text-white">Enter Next Wrestler (#{nextEntry.entryNumber})</CardTitle>
@@ -260,6 +357,80 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
             </CardContent>
           </Card>
         )}
+
+        {/* Message when event not started */}
+        {event.status === "NOT_STARTED" && (
+          <Card className="bg-blue-900/30 border-blue-500 mb-8">
+            <CardContent className="py-6 text-center">
+              <p className="text-blue-300 text-lg">Start the event before adding wrestlers</p>
+              <p className="text-gray-400 text-sm mt-2">Click the "Start Event" button above to begin</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Test Mode Section */}
+        <Card className="bg-gray-800/50 border-gray-700 mb-8">
+          <CardHeader
+            className="cursor-pointer"
+            onClick={() => setTestModeOpen(!testModeOpen)}
+          >
+            <CardTitle className="text-white flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                Test Mode
+                <Badge variant="outline" className="text-orange-400 border-orange-400">
+                  Demo
+                </Badge>
+              </span>
+              <span className="text-gray-400 text-sm">
+                {testModeOpen ? "▼" : "▶"}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          {testModeOpen && (
+            <CardContent className="space-y-4">
+              <p className="text-gray-400 text-sm">
+                Use these tools to quickly test the event flow with auto-generated data.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  onClick={() => handleTestAction("fill")}
+                  disabled={testModeLoading || simulatingEliminations || enteredCount === 30}
+                  className="bg-purple-600 hover:bg-purple-700"
+                >
+                  {testModeLoading ? "Working..." : "Auto-fill All Wrestlers"}
+                </Button>
+                <Button
+                  onClick={() => handleTestAction("eliminate")}
+                  disabled={testModeLoading || simulatingEliminations || activeCount === 0}
+                  variant="destructive"
+                >
+                  {testModeLoading ? "Working..." : "Eliminate Random Wrestler"}
+                </Button>
+                <Button
+                  onClick={simulateEliminations}
+                  disabled={testModeLoading || simulatingEliminations || activeCount < 2}
+                  className="bg-orange-600 hover:bg-orange-700"
+                >
+                  {simulatingEliminations ? "Simulating..." : "Simulate Until Winner"}
+                </Button>
+                <Button
+                  onClick={() => handleTestAction("reset")}
+                  disabled={testModeLoading || simulatingEliminations}
+                  variant="outline"
+                  className="bg-transparent border-gray-500 text-gray-300 hover:bg-gray-700"
+                >
+                  {testModeLoading ? "Working..." : "Reset Event"}
+                </Button>
+              </div>
+              {simulatingEliminations && (
+                <div className="flex items-center gap-2 text-orange-400">
+                  <div className="animate-spin h-4 w-4 border-2 border-orange-400 border-t-transparent rounded-full" />
+                  <span>Simulating eliminations... {activeCount} wrestlers remaining</span>
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
 
         {/* All Entries */}
         <Card className="bg-gray-800/50 border-gray-700">
@@ -303,24 +474,28 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
                   </div>
                   <div className="flex gap-2">
                     {!entry.wrestlerName ? (
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="Wrestler name..."
-                          value={editingEntry === entry.entryNumber ? wrestlerInput : ""}
-                          onChange={(e) => {
-                            setEditingEntry(entry.entryNumber);
-                            setWrestlerInput(e.target.value);
-                          }}
-                          className="bg-gray-900 border-gray-600 text-white w-40"
-                        />
-                        <Button
-                          size="sm"
-                          onClick={() => handleSetWrestler(entry.entryNumber)}
-                          disabled={saving || editingEntry !== entry.entryNumber}
-                        >
-                          Set
-                        </Button>
-                      </div>
+                      event.status === "IN_PROGRESS" ? (
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="Wrestler name..."
+                            value={editingEntry === entry.entryNumber ? wrestlerInput : ""}
+                            onChange={(e) => {
+                              setEditingEntry(entry.entryNumber);
+                              setWrestlerInput(e.target.value);
+                            }}
+                            className="bg-gray-900 border-gray-600 text-white w-40"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => handleSetWrestler(entry.entryNumber)}
+                            disabled={saving || editingEntry !== entry.entryNumber}
+                          >
+                            Set
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-gray-500 text-sm">Start event to add wrestlers</span>
+                      )
                     ) : !entry.eliminatedAt && !entry.isWinner ? (
                       <div className="flex gap-2">
                         <Input

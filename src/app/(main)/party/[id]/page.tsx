@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Header } from "@/components/Header";
+import { UserAvatar } from "@/components/UserAvatar";
 
 interface Entry {
   id: string;
@@ -28,7 +29,7 @@ interface Assignment {
 
 interface Participant {
   id: string;
-  user: { id: string; name: string | null; email: string };
+  user: { id: string; name: string | null; email: string; profileImageUrl?: string | null };
   assignments: Assignment[];
 }
 
@@ -201,20 +202,11 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
             </div>
             <div className="flex items-center gap-4">
               {party.isHost && party.status === "LOBBY" && (
-                <>
-                  <Button
-                    onClick={handleDistribute}
-                    disabled={distributing || party.participants.length === 0}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    {distributing ? "Starting..." : "Start Party"}
+                <Link href={`/party/${party.id}/admin`}>
+                  <Button variant="outline" className="bg-transparent border-purple-500 text-purple-500 hover:bg-purple-500/10">
+                    Manage Players
                   </Button>
-                  <Link href={`/party/${party.id}/admin`}>
-                    <Button variant="outline" className="bg-transparent border-purple-500 text-purple-500 hover:bg-purple-500/10">
-                      Manage Players
-                    </Button>
-                  </Link>
-                </>
+                </Link>
               )}
               {party.isHost && party.status !== "LOBBY" && (
                 <Link href={`/party/${party.id}/admin`}>
@@ -283,8 +275,24 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                   </div>
                 ) : party.status === "LOBBY" ? (
                   <div className="text-center py-8">
-                    <p className="text-gray-400 mb-2">Waiting for host to start the game...</p>
-                    <p className="text-gray-500 text-sm">{party.participants.length} participant{party.participants.length !== 1 ? "s" : ""} have joined</p>
+                    {party.isHost ? (
+                      <>
+                        <p className="text-gray-400 mb-2">{party.participants.length} participant{party.participants.length !== 1 ? "s" : ""} have joined</p>
+                        <Button
+                          onClick={handleDistribute}
+                          disabled={distributing || party.participants.length === 0}
+                          className="bg-green-600 hover:bg-green-700 mt-4"
+                          size="lg"
+                        >
+                          {distributing ? "Starting..." : "Start Party"}
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-gray-400 mb-2">Waiting for host to start the game...</p>
+                        <p className="text-gray-500 text-sm">{party.participants.length} participant{party.participants.length !== 1 ? "s" : ""} have joined</p>
+                      </>
+                    )}
                   </div>
                 ) : myNumbers.length === 0 ? (
                   <p className="text-gray-400">You don&apos;t have any numbers assigned.</p>
@@ -409,6 +417,12 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                         className="flex justify-between items-center p-2 rounded bg-gray-700/30"
                       >
                         <div className="flex items-center gap-2">
+                          <UserAvatar
+                            name={participant.user.name}
+                            email={participant.user.email}
+                            profileImageUrl={participant.user.profileImageUrl}
+                            size="sm"
+                          />
                           <span className="text-white">{participant.user.name || participant.user.email}</span>
                           {participant.user.id === party.hostId && (
                             <Badge variant="outline" className="text-yellow-500 border-yellow-500 text-xs">Host</Badge>

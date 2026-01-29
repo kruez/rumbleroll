@@ -78,6 +78,31 @@ export async function PATCH(
       data: updateData,
     });
 
+    // Check if auto-winner should be declared after elimination
+    if (eliminatedBy !== undefined && eliminatedBy) {
+      // Get all entries to check remaining active wrestlers
+      const allEntries = await prisma.rumbleEntry.findMany({
+        where: { eventId },
+      });
+
+      const activeEntries = allEntries.filter(
+        (e) => e.wrestlerName && !e.eliminatedAt && !e.isWinner
+      );
+
+      // If only one wrestler remains and no winner yet, auto-declare winner
+      if (activeEntries.length === 1) {
+        const lastStanding = activeEntries[0];
+        await prisma.rumbleEntry.update({
+          where: { id: lastStanding.id },
+          data: { isWinner: true },
+        });
+        await prisma.rumbleEvent.update({
+          where: { id: eventId },
+          data: { status: "COMPLETED" },
+        });
+      }
+    }
+
     return NextResponse.json(updatedEntry);
   } catch (error) {
     console.error("Error updating entry:", error);

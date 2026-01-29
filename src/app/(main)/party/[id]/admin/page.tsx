@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Header } from "@/components/Header";
+import { UserAvatar } from "@/components/UserAvatar";
 
 interface Entry {
   id: string;
@@ -27,7 +28,7 @@ interface Assignment {
 
 interface Participant {
   id: string;
-  user: { id: string; name: string | null; email: string };
+  user: { id: string; name: string | null; email: string; profileImageUrl?: string | null };
   assignments: Assignment[];
 }
 
@@ -172,6 +173,12 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
                     className="flex justify-between items-center p-3 rounded-lg bg-gray-700/30"
                   >
                     <div className="flex items-center gap-2">
+                      <UserAvatar
+                        name={p.user.name}
+                        email={p.user.email}
+                        profileImageUrl={p.user.profileImageUrl}
+                        size="sm"
+                      />
                       <span className="text-white">{p.user.name || p.user.email}</span>
                       {p.user.id === party.hostId && (
                         <Badge variant="outline" className="text-yellow-500 border-yellow-500 text-xs">Host</Badge>
@@ -332,13 +339,13 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
                     })}
                   </div>
                   <div className="flex gap-4 mt-4 text-xs">
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1 text-gray-300">
                       <span className="w-3 h-3 bg-gray-700 rounded"></span> Pending
                     </span>
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1 text-gray-300">
                       <span className="w-3 h-3 bg-green-500 rounded"></span> Active
                     </span>
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1 text-gray-300">
                       <span className="w-3 h-3 bg-red-500/50 rounded"></span> Out
                     </span>
                   </div>
@@ -396,7 +403,15 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
                           key={p.id}
                           className="flex justify-between items-center p-2 rounded bg-gray-700/30"
                         >
+                          <div className="flex items-center gap-2">
+                          <UserAvatar
+                            name={p.user.name}
+                            email={p.user.email}
+                            profileImageUrl={p.user.profileImageUrl}
+                            size="sm"
+                          />
                           <span className="text-white">{p.user.name || p.user.email}</span>
+                        </div>
                           {hasWinner ? (
                             <Badge className="bg-yellow-500">Winner!</Badge>
                           ) : (
