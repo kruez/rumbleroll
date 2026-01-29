@@ -9,8 +9,15 @@ import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Header } from "@/components/Header";
 import { UserAvatar } from "@/components/UserAvatar";
+import { ChevronDown } from "lucide-react";
 
 interface Entry {
   id: string;
@@ -215,11 +222,25 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                   </Button>
                 </Link>
               )}
-              <Link href={`/party/${party.id}/tv`}>
-                <Button variant="outline" className="bg-transparent border-white text-white hover:bg-white/10">
-                  Scoreboard
-                </Button>
-              </Link>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="bg-transparent border-white text-white hover:bg-white/10">
+                    Scoreboard <ChevronDown className="ml-2 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
+                  <DropdownMenuItem asChild className="text-white hover:bg-gray-700 cursor-pointer">
+                    <Link href={`/party/${party.id}/tv`}>
+                      Detailed View
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild className="text-white hover:bg-gray-700 cursor-pointer">
+                    <Link href={`/party/${party.id}/tv/v2`}>
+                      Simple View
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               {party.status === "COMPLETED" && (
                 <Link href={`/party/${party.id}/results`}>
                   <Button variant="outline" className="bg-transparent border-yellow-500 text-yellow-500 hover:bg-yellow-500/10">

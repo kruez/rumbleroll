@@ -95,6 +95,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
 
   // Animation states
   const [animatingOut, setAnimatingOut] = useState<Set<string>>(new Set());
+  const [skullAnimatingEntries, setSkullAnimatingEntries] = useState<Set<string>>(new Set());
   const [latestEntryId, setLatestEntryId] = useState<string | null>(null);
 
   // Winner celebration replay state
@@ -177,21 +178,32 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
           setLatestEntryId(entry.id);
         }
 
-        // New elimination - trigger spin-out animation
+        // New elimination - trigger skull animation
         if (entry.eliminatedAt && (!prevEntry || !prevEntry.eliminatedAt)) {
           // Clear any entry pulse when elimination occurs
           setLatestEntryId(null);
 
-          // Add to animating out set
-          setAnimatingOut((prev) => new Set(prev).add(entry.id));
+          // Add to skull animating set
+          setSkullAnimatingEntries((prev) => new Set(prev).add(entry.id));
 
-          // Remove from animating out after animation completes
+          // After skull animation completes (1.2s total), remove from skull animation
+          // and add to animating out briefly for transition
           setTimeout(() => {
-            setAnimatingOut((prev) => {
+            setSkullAnimatingEntries((prev) => {
               const next = new Set(prev);
               next.delete(entry.id);
               return next;
             });
+            setAnimatingOut((prev) => new Set(prev).add(entry.id));
+
+            // Remove from animating out after brief transition
+            setTimeout(() => {
+              setAnimatingOut((prev) => {
+                const next = new Set(prev);
+                next.delete(entry.id);
+                return next;
+              });
+            }, 300);
           }, 1200);
         }
 
@@ -546,7 +558,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
               return (
                 <div
                   key={num}
-                  className="bg-gray-700/50 border border-gray-600 rounded-lg p-2 flex flex-col items-center justify-center"
+                  className="bg-gray-700/30 border border-gray-600 rounded-lg p-2 flex flex-col items-center justify-center opacity-50"
                 >
                   <span className="text-3xl font-bold text-gray-400">{num}</span>
                   <span className="text-xs text-gray-500 mt-1">WAITING</span>
@@ -566,7 +578,14 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
             const playerColor = participantId ? PLAYER_COLORS[participantColorMap.get(participantId) ?? 0] : PLAYER_COLORS[0];
 
             const isAnimatingOut = entry ? animatingOut.has(entry.id) : false;
+            const isShowingSkull = entry ? skullAnimatingEntries.has(entry.id) : false;
             const isLatestEntry = entry ? latestEntryId === entry.id : false;
+
+            // Get a muted version of the player color for pending state (lower opacity)
+            const playerColorMuted = participantId ? {
+              bg: playerColor.bg.replace('/50', '/30'),
+              border: playerColor.border,
+            } : { bg: 'bg-gray-700/30', border: 'border-gray-600' };
 
             // Determine card styling based on state
             let cardClasses = "";
@@ -575,11 +594,15 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
             if (state === "winner") {
               cardClasses = "bg-yellow-500/40 border-2 border-yellow-400 ring-2 ring-yellow-400";
             } else if (state === "eliminated") {
-              if (isAnimatingOut) {
-                cardClasses = "bg-red-500/40 border border-red-500";
-                animationClass = "animate-[spinEject_1.2s_ease-in_forwards]";
+              if (isShowingSkull) {
+                // During skull animation - dim the card but keep player color
+                cardClasses = `${playerColor.bg.replace('/50', '/20')} border ${playerColor.border} opacity-60`;
+              } else if (isAnimatingOut) {
+                // Brief transition after skull
+                cardClasses = `${playerColor.bg.replace('/50', '/20')} border ${playerColor.border} opacity-50`;
               } else {
-                cardClasses = "bg-red-900/30 border border-red-800/50 opacity-70";
+                // Final eliminated state - keep player color with overlay and muted appearance
+                cardClasses = `${playerColor.bg.replace('/50', '/20')} border ${playerColor.border} opacity-60`;
               }
             } else if (state === "active") {
               cardClasses = `${playerColor.bg} border-2 ${playerColor.border}`;
@@ -587,22 +610,31 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                 animationClass = "animate-[pulseGlowGreen_2s_ease-in-out_infinite]";
               }
             } else {
-              // Pending state
-              cardClasses = "bg-gray-700/50 border border-gray-600";
+              // Pending state - use muted player color
+              cardClasses = `${playerColorMuted.bg} border ${playerColorMuted.border} opacity-50`;
             }
 
             return (
               <div
                 key={num}
-                className={`rounded-lg p-2 flex flex-col ${cardClasses} ${animationClass} transition-all duration-300`}
+                className={`rounded-lg p-2 flex flex-col relative ${cardClasses} ${animationClass} transition-all duration-300`}
               >
+                {/* Skull overlay for elimination animation */}
+                {isShowingSkull && (
+                  <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+                    <span className="text-5xl animate-[skullSpinIn_0.8s_ease-out_forwards]">
+                      <span className="inline-block animate-[skullSmash_0.4s_ease-in_0.8s_forwards]">💀</span>
+                    </span>
+                  </div>
+                )}
+
                 {/* Entry Number - always visible */}
                 <div className="flex items-center justify-between mb-1">
                   <span className={`text-2xl font-bold ${
                     state === "winner" ? "text-yellow-300" :
-                    state === "eliminated" ? "text-red-400/70" :
+                    state === "eliminated" ? playerColor.text + " opacity-60" :
                     state === "active" ? playerColor.text :
-                    "text-gray-400"
+                    playerColor.text + " opacity-70"
                   }`}>
                     {num}
                   </span>
@@ -616,8 +648,8 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                       {formatDuration(entry.enteredAt, null)}
                     </span>
                   )}
-                  {state === "eliminated" && entry && (
-                    <span className="text-xs font-mono text-red-400/60 bg-black/30 px-1 py-0.5 rounded">
+                  {state === "eliminated" && entry && !isShowingSkull && (
+                    <span className="text-xs font-mono text-gray-400/60 bg-black/30 px-1 py-0.5 rounded">
                       {formatDuration(entry.enteredAt, entry.eliminatedAt)}
                     </span>
                   )}
@@ -626,21 +658,21 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                   )}
                 </div>
 
-                {/* Player Name */}
-                <p className={`text-xs truncate ${
+                {/* Player Name - larger text */}
+                <p className={`text-base truncate ${
                   state === "winner" ? "text-yellow-200" :
-                  state === "eliminated" ? "text-gray-500" :
+                  state === "eliminated" ? playerColor.text + " opacity-50" :
                   state === "active" ? "text-white/80" :
-                  "text-gray-400"
+                  playerColor.text + " opacity-60"
                 }`}>
                   {participantInfo?.name || "Unassigned"}
                 </p>
 
-                {/* Wrestler Name (when entered) */}
+                {/* Wrestler Name (when entered) - larger text */}
                 {entry?.wrestlerName && (
-                  <p className={`text-sm font-semibold truncate mt-auto ${
+                  <p className={`text-xl font-semibold truncate mt-auto ${
                     state === "winner" ? "text-white" :
-                    state === "eliminated" ? "text-red-300/50 line-through" :
+                    state === "eliminated" ? "text-white/40" :
                     "text-white"
                   }`}>
                     {entry.wrestlerName}
@@ -648,8 +680,8 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                 )}
 
                 {/* Eliminated By (when eliminated) */}
-                {state === "eliminated" && entry?.eliminatedBy && (
-                  <p className="text-xs text-red-400/60 truncate">
+                {state === "eliminated" && entry?.eliminatedBy && !isShowingSkull && (
+                  <p className="text-xs text-gray-400/60 truncate">
                     by {entry.eliminatedBy}
                   </p>
                 )}
