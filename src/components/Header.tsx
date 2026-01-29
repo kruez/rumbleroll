@@ -27,11 +27,6 @@ export function Header({ showBackLink }: HeaderProps = {}) {
       <div className="container mx-auto px-4 py-4">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-4">
-            {showBackLink && (
-              <Link href={showBackLink.href} className="text-gray-400 hover:text-white text-sm">
-                &larr; {showBackLink.label}
-              </Link>
-            )}
             <Link href={isAuthenticated ? "/dashboard" : "/"} className="flex items-center gap-2">
               {/* Inline SVG icon from logo.svg */}
               <svg width="40" height="40" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -59,6 +54,11 @@ export function Header({ showBackLink }: HeaderProps = {}) {
                 <span className="text-yellow-400">Roll</span>
               </span>
             </Link>
+            {showBackLink && (
+              <Link href={showBackLink.href} className="text-gray-400 hover:text-white text-sm">
+                &larr; {showBackLink.label}
+              </Link>
+            )}
           </div>
 
           <div className="flex items-center gap-4">

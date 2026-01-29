@@ -58,6 +58,8 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
   const [party, setParty] = useState<Party | null>(null);
   const [loading, setLoading] = useState(true);
   const [removingParticipant, setRemovingParticipant] = useState<string | null>(null);
+  const [testModeExpanded, setTestModeExpanded] = useState(false);
+  const [testModeLoading, setTestModeLoading] = useState(false);
 
   const fetchParty = useCallback(async () => {
     try {
@@ -101,6 +103,28 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
       toast.error("Failed to remove participant");
     } finally {
       setRemovingParticipant(null);
+    }
+  };
+
+  const handleTestModeAction = async (action: string, count?: number) => {
+    setTestModeLoading(true);
+    try {
+      const res = await fetch(`/api/parties/${id}/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, count }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Test mode action failed");
+        return;
+      }
+      toast.success(data.message);
+      fetchParty();
+    } catch {
+      toast.error("Test mode action failed");
+    } finally {
+      setTestModeLoading(false);
     }
   };
 
@@ -199,6 +223,68 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
                 ))}
               </div>
             </CardContent>
+          </Card>
+        )}
+
+        {/* Test Mode Section - Only in LOBBY */}
+        {party.status === "LOBBY" && (
+          <Card className="bg-orange-500/10 border-orange-500/50 mb-8">
+            <CardHeader
+              className="cursor-pointer"
+              onClick={() => setTestModeExpanded(!testModeExpanded)}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-orange-400 text-lg">Test Mode</CardTitle>
+                  <Badge variant="outline" className="text-orange-400 border-orange-400 text-xs">Dev</Badge>
+                </div>
+                <span className="text-orange-400">{testModeExpanded ? "▼" : "▶"}</span>
+              </div>
+              <CardDescription className="text-gray-400">
+                Add fake players to test the party flow
+              </CardDescription>
+            </CardHeader>
+            {testModeExpanded && (
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => handleTestModeAction("addPlayers", 5)}
+                    disabled={testModeLoading}
+                    className="bg-orange-600 hover:bg-orange-700"
+                  >
+                    {testModeLoading ? "..." : "Add 5 Test Players"}
+                  </Button>
+                  <Button
+                    onClick={() => handleTestModeAction("addPlayers", 10)}
+                    disabled={testModeLoading}
+                    className="bg-orange-600 hover:bg-orange-700"
+                  >
+                    {testModeLoading ? "..." : "Add 10 Test Players"}
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => handleTestModeAction("removeTestPlayers")}
+                    disabled={testModeLoading}
+                    variant="outline"
+                    className="border-orange-500 text-orange-400 hover:bg-orange-500/20"
+                  >
+                    {testModeLoading ? "..." : "Remove Test Players"}
+                  </Button>
+                  <Button
+                    onClick={() => handleTestModeAction("reset")}
+                    disabled={testModeLoading}
+                    variant="outline"
+                    className="border-red-500 text-red-400 hover:bg-red-500/20"
+                  >
+                    {testModeLoading ? "..." : "Reset Party"}
+                  </Button>
+                </div>
+                <p className="text-gray-500 text-xs">
+                  Test players use @test.local emails and cannot log in. They will be assigned numbers like real players.
+                </p>
+              </CardContent>
+            )}
           </Card>
         )}
 

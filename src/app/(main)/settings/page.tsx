@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +25,7 @@ interface UserProfile {
 
 export default function SettingsPage() {
   const router = useRouter();
+  const { update } = useSession();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -87,6 +89,8 @@ export default function SettingsPage() {
         return;
       }
 
+      // Refresh the session to update header with new profile data
+      await update();
       toast.success("Profile saved successfully");
     } catch {
       setError("Something went wrong");
