@@ -54,7 +54,7 @@ export function showEliminationAnnouncement({
           <div className="flex items-center justify-center gap-4">
             <span className="text-3xl font-black text-red-200 shrink-0">#{entryNumber}</span>
             <div className="h-8 w-0.5 bg-red-400 shrink-0" />
-            <span className="text-2xl font-bold uppercase tracking-wider line-through decoration-2 truncate">
+            <span className="text-2xl font-bold uppercase tracking-wider line-through decoration-2">
               {wrestlerName}
             </span>
           </div>
@@ -67,7 +67,7 @@ export function showEliminationAnnouncement({
     {
       duration: 4000,
       position: "top-right",
-      className: "!w-full !max-w-2xl",
+      className: "!w-full !max-w-4xl",
     }
   );
 }

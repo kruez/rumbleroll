@@ -12,16 +12,39 @@ import {
 import { UpNextBadge } from "@/components/tv/UpNextBadge";
 
 const PLAYER_COLORS = [
+  // Primary bright colors (10)
   { bg: "bg-blue-600/50", border: "border-blue-400", text: "text-blue-200", ring: "ring-blue-400" },
-  { bg: "bg-fuchsia-600/50", border: "border-fuchsia-400", text: "text-fuchsia-200", ring: "ring-fuchsia-400" },
-  { bg: "bg-amber-600/50", border: "border-amber-400", text: "text-amber-200", ring: "ring-amber-400" },
-  { bg: "bg-cyan-600/50", border: "border-cyan-400", text: "text-cyan-200", ring: "ring-cyan-400" },
   { bg: "bg-rose-600/50", border: "border-rose-400", text: "text-rose-200", ring: "ring-rose-400" },
   { bg: "bg-emerald-600/50", border: "border-emerald-400", text: "text-emerald-200", ring: "ring-emerald-400" },
+  { bg: "bg-amber-600/50", border: "border-amber-400", text: "text-amber-200", ring: "ring-amber-400" },
   { bg: "bg-violet-600/50", border: "border-violet-400", text: "text-violet-200", ring: "ring-violet-400" },
+  { bg: "bg-cyan-600/50", border: "border-cyan-400", text: "text-cyan-200", ring: "ring-cyan-400" },
   { bg: "bg-orange-600/50", border: "border-orange-400", text: "text-orange-200", ring: "ring-orange-400" },
+  { bg: "bg-fuchsia-600/50", border: "border-fuchsia-400", text: "text-fuchsia-200", ring: "ring-fuchsia-400" },
   { bg: "bg-teal-600/50", border: "border-teal-400", text: "text-teal-200", ring: "ring-teal-400" },
   { bg: "bg-pink-600/50", border: "border-pink-400", text: "text-pink-200", ring: "ring-pink-400" },
+  // Darker variants (10)
+  { bg: "bg-blue-800/50", border: "border-blue-500", text: "text-blue-300", ring: "ring-blue-500" },
+  { bg: "bg-rose-800/50", border: "border-rose-500", text: "text-rose-300", ring: "ring-rose-500" },
+  { bg: "bg-emerald-800/50", border: "border-emerald-500", text: "text-emerald-300", ring: "ring-emerald-500" },
+  { bg: "bg-amber-800/50", border: "border-amber-500", text: "text-amber-300", ring: "ring-amber-500" },
+  { bg: "bg-violet-800/50", border: "border-violet-500", text: "text-violet-300", ring: "ring-violet-500" },
+  { bg: "bg-cyan-800/50", border: "border-cyan-500", text: "text-cyan-300", ring: "ring-cyan-500" },
+  { bg: "bg-orange-800/50", border: "border-orange-500", text: "text-orange-300", ring: "ring-orange-500" },
+  { bg: "bg-fuchsia-800/50", border: "border-fuchsia-500", text: "text-fuchsia-300", ring: "ring-fuchsia-500" },
+  { bg: "bg-teal-800/50", border: "border-teal-500", text: "text-teal-300", ring: "ring-teal-500" },
+  { bg: "bg-pink-800/50", border: "border-pink-500", text: "text-pink-300", ring: "ring-pink-500" },
+  // Additional hues (10)
+  { bg: "bg-indigo-600/50", border: "border-indigo-400", text: "text-indigo-200", ring: "ring-indigo-400" },
+  { bg: "bg-lime-600/50", border: "border-lime-400", text: "text-lime-200", ring: "ring-lime-400" },
+  { bg: "bg-sky-600/50", border: "border-sky-400", text: "text-sky-200", ring: "ring-sky-400" },
+  { bg: "bg-red-600/50", border: "border-red-400", text: "text-red-200", ring: "ring-red-400" },
+  { bg: "bg-purple-600/50", border: "border-purple-400", text: "text-purple-200", ring: "ring-purple-400" },
+  { bg: "bg-green-600/50", border: "border-green-400", text: "text-green-200", ring: "ring-green-400" },
+  { bg: "bg-yellow-600/50", border: "border-yellow-400", text: "text-yellow-200", ring: "ring-yellow-400" },
+  { bg: "bg-slate-600/50", border: "border-slate-400", text: "text-slate-200", ring: "ring-slate-400" },
+  { bg: "bg-zinc-600/50", border: "border-zinc-400", text: "text-zinc-200", ring: "ring-zinc-400" },
+  { bg: "bg-stone-600/50", border: "border-stone-400", text: "text-stone-200", ring: "ring-stone-400" },
 ];
 
 interface Entry {
@@ -103,6 +126,7 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     participantId: string;
   } | null>(null);
   const upNextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastProcessedEntryRef = useRef<string | null>(null);
 
   // Track previous entries for detecting changes
   const prevEntriesRef = useRef<Entry[]>([]);
@@ -304,71 +328,79 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     return sorted.find(e => !e.wrestlerName) ?? null;
   }, [party]);
 
-  // Up Next badge management
+  // Up Next badge management - simplified to avoid stale closures
+  // Track if we've initialized the badge
+  const upNextInitializedRef = useRef(false);
+
   useEffect(() => {
     if (!party) return;
 
     const entries = party.event.entries;
-    const prevEntries = prevEntriesRef.current;
+    const enteredCount = entries.filter(e => e.wrestlerName).length;
 
-    // Check for new entries to show "entered" state
-    for (const entry of entries) {
-      const prevEntry = prevEntries.find((e) => e.id === entry.id);
-      if (entry.wrestlerName && (!prevEntry || !prevEntry.wrestlerName)) {
-        // New entry detected - show "entered" mode
-        const participantInfo = getParticipantInfoForEntry(entry.entryNumber);
-        if (participantInfo) {
-          // Clear any existing timeout
-          if (upNextTimeoutRef.current) {
-            clearTimeout(upNextTimeoutRef.current);
-          }
-
-          setDisplayedEntry({
-            entryNumber: entry.entryNumber,
-            participantName: participantInfo.name,
-            wrestlerName: entry.wrestlerName,
-            participantId: participantInfo.id,
-          });
-          setUpNextMode("entered");
-
-          // After 10 seconds, transition to next pending or hide
-          upNextTimeoutRef.current = setTimeout(() => {
-            if (nextPendingEntry) {
-              const nextParticipantInfo = getParticipantInfoForEntry(nextPendingEntry.entryNumber);
-              if (nextParticipantInfo) {
-                setDisplayedEntry({
-                  entryNumber: nextPendingEntry.entryNumber,
-                  participantName: nextParticipantInfo.name,
-                  participantId: nextParticipantInfo.id,
-                });
-                setUpNextMode("pending");
-              }
-            } else {
-              setUpNextMode("hidden");
-            }
-          }, 10000);
-        }
-        break; // Only process one new entry at a time
-      }
+    // Hide badge when all 30 entered
+    if (enteredCount >= 30) {
+      setUpNextMode("hidden");
+      return;
     }
 
-    // If no displayed entry yet and we have a next pending, show it
-    if (!displayedEntry && nextPendingEntry) {
-      const participantInfo = getParticipantInfoForEntry(nextPendingEntry.entryNumber);
+    // Find the most recently entered wrestler (not yet processed)
+    const recentEntry = entries
+      .filter(e => e.wrestlerName && e.id !== lastProcessedEntryRef.current)
+      .sort((a, b) => new Date(b.enteredAt!).getTime() - new Date(a.enteredAt!).getTime())[0];
+
+    if (recentEntry && recentEntry.id !== lastProcessedEntryRef.current) {
+      // Show "entered" state
+      lastProcessedEntryRef.current = recentEntry.id;
+      const participantInfo = getParticipantInfoForEntry(recentEntry.entryNumber);
       if (participantInfo) {
         setDisplayedEntry({
-          entryNumber: nextPendingEntry.entryNumber,
+          entryNumber: recentEntry.entryNumber,
           participantName: participantInfo.name,
+          wrestlerName: recentEntry.wrestlerName ?? undefined,
           participantId: participantInfo.id,
         });
-        setUpNextMode("pending");
-      }
-    }
+        setUpNextMode("entered");
 
-    // If all 30 have entered, hide the badge
-    const enteredCount = entries.filter(e => e.wrestlerName).length;
-    if (enteredCount >= 30 && upNextMode !== "entered") {
-      setUpNextMode("hidden");
+        // Clear timeout and set new one
+        if (upNextTimeoutRef.current) clearTimeout(upNextTimeoutRef.current);
+        upNextTimeoutRef.current = setTimeout(() => {
+          // Transition to next pending (compute fresh from current party state)
+          const nextPending = party.event.entries
+            .filter(e => !e.wrestlerName)
+            .sort((a, b) => a.entryNumber - b.entryNumber)[0];
+          if (nextPending) {
+            const nextInfo = getParticipantInfoForEntry(nextPending.entryNumber);
+            if (nextInfo) {
+              setDisplayedEntry({
+                entryNumber: nextPending.entryNumber,
+                participantName: nextInfo.name,
+                participantId: nextInfo.id,
+              });
+              setUpNextMode("pending");
+            }
+          } else {
+            setUpNextMode("hidden");
+          }
+        }, 10000);
+      }
+    } else if (!upNextInitializedRef.current) {
+      // Initial state - show next pending
+      upNextInitializedRef.current = true;
+      const nextPending = entries
+        .filter(e => !e.wrestlerName)
+        .sort((a, b) => a.entryNumber - b.entryNumber)[0];
+      if (nextPending) {
+        const info = getParticipantInfoForEntry(nextPending.entryNumber);
+        if (info) {
+          setDisplayedEntry({
+            entryNumber: nextPending.entryNumber,
+            participantName: info.name,
+            participantId: info.id,
+          });
+          setUpNextMode("pending");
+        }
+      }
     }
 
     return () => {
@@ -376,17 +408,22 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
         clearTimeout(upNextTimeoutRef.current);
       }
     };
-  }, [party, nextPendingEntry, displayedEntry, upNextMode, getParticipantInfoForEntry]);
+  }, [party, getParticipantInfoForEntry]);
 
   // Auto-trigger winner when only 1 wrestler remains after all 30 entered
   useEffect(() => {
     if (!party || hasAnnouncedWinnerRef.current) return;
 
     const entries = party.event.entries;
-    const allEntered = entries.filter(e => e.wrestlerName).length === 30;
+    const enteredCount = entries.filter(e => e.wrestlerName).length;
     const activeWrestlers = entries.filter(e => e.wrestlerName && !e.eliminatedAt && !e.isWinner);
+    const existingWinner = entries.find(e => e.isWinner);
 
-    if (allEntered && activeWrestlers.length === 1) {
+    // Don't auto-trigger if backend already set a winner
+    if (existingWinner) return;
+
+    // Only trigger when ALL 30 have entered AND exactly 1 remains
+    if (enteredCount === 30 && activeWrestlers.length === 1) {
       const winner = activeWrestlers[0];
       hasAnnouncedWinnerRef.current = true;
 
@@ -868,7 +905,7 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
               <Badge className="bg-purple-600">{party.participants.length} players</Badge>
             </h2>
             <div className="space-y-2 overflow-y-auto max-h-[calc(100%-3rem)]">
-              {standings.map((p, idx) => {
+              {standings.map((p) => {
                   const isEliminated = p.activeCount === 0 && p.waitingCount === 0 && !p.hasWinner && p.eliminatedCount > 0;
                   const hasActivityPulse = lastActivityParticipant?.id === p.id;
                   const activityType = lastActivityParticipant?.type;
@@ -898,45 +935,45 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
                       key={p.id}
                       className={`flex items-center gap-2 p-2 rounded-lg ${cardClasses} ${pulseClass}`}
                     >
-                      <span className="text-xl font-bold text-white w-6 shrink-0">
-                        {isEliminated ? "💀" : idx + 1}
-                      </span>
+                      {/* Skull icon only for eliminated players, no rank number */}
+                      {isEliminated && <span className="text-lg">💀</span>}
+
+                      <UserAvatar name={p.user.name} email={p.user.email} profileImageUrl={p.user.profileImageUrl} size="sm" />
+
                       <div className="flex-1 min-w-0">
                         <p className={`font-bold text-sm ${isEliminated ? "text-gray-400" : "text-white"} truncate`}>{p.displayName}</p>
-                        <div className="flex gap-0.5 flex-wrap">
-                          {/* Active wrestlers - compact number-only badges */}
+                        <div className="flex gap-1 flex-wrap items-center">
+                          {/* Active wrestlers with names */}
                           {p.assignments
-                            .map((a) => {
-                              const entry = entries.find(e => e.entryNumber === a.entryNumber);
-                              return { num: a.entryNumber, entry };
-                            })
+                            .map((a) => ({ num: a.entryNumber, entry: entries.find(e => e.entryNumber === a.entryNumber) }))
                             .filter(({ entry }) => entry?.wrestlerName && !entry?.eliminatedAt && !entry?.isWinner)
-                            .map(({ num }) => (
+                            .map(({ num, entry }) => (
                               <Badge key={num} className={`${playerColor.bg} ${playerColor.border} ${playerColor.text} text-xs px-1.5 py-0`}>
-                                #{num}
+                                #{num} {entry!.wrestlerName}
                               </Badge>
                             ))}
-                          {/* Eliminated wrestlers - compact strikethrough */}
+
+                          {/* Pending count badge */}
+                          {p.waitingCount > 0 && (
+                            <Badge className="bg-gray-600/50 border-gray-500 text-gray-300 text-xs px-1.5 py-0">
+                              {p.waitingCount} pending
+                            </Badge>
+                          )}
+
+                          {/* Eliminated wrestlers (compact, just numbers) */}
                           {p.assignments
-                            .map((a) => {
-                              const entry = entries.find(e => e.entryNumber === a.entryNumber);
-                              return { num: a.entryNumber, entry };
-                            })
+                            .map((a) => ({ num: a.entryNumber, entry: entries.find(e => e.entryNumber === a.entryNumber) }))
                             .filter(({ entry }) => entry?.eliminatedAt)
                             .map(({ num }) => (
-                              <span key={num} className="text-gray-500 text-xs line-through px-1">
-                                #{num}
-                              </span>
+                              <span key={num} className="text-gray-500 text-xs line-through px-0.5">#{num}</span>
                             ))}
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        {p.hasWinner ? (
-                          <Badge className="bg-yellow-500 text-black font-bold text-xs">WIN</Badge>
-                        ) : (
-                          <span className={`text-2xl font-black ${isEliminated ? "text-gray-500" : "text-white"}`}>{p.activeCount}</span>
-                        )}
-                      </div>
+
+                      {/* Winner badge only, no activeCount number */}
+                      {p.hasWinner && (
+                        <Badge className="bg-yellow-500 text-black font-bold text-xs shrink-0">WIN</Badge>
+                      )}
                     </div>
                   );
                 })}
