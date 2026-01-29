@@ -240,14 +240,22 @@ export default function TestDashboardPage({
     const delay = (ms: number) =>
       new Promise((resolve) => setTimeout(resolve, ms));
 
-    let enteredCount = event?.entries.filter((e) => e.wrestlerName).length || 0;
-    let activeCount =
-      event?.entries.filter(
-        (e) => e.wrestlerName && !e.eliminatedAt && !e.isWinner
-      ).length || 0;
     let hasWinner = false;
 
     while (!hasWinner && !stopSimulationRef.current) {
+      // Fetch fresh state each iteration to avoid stale counters
+      const res = await fetch(`/api/admin/events/${id}`);
+      if (!res.ok) break;
+      const freshEvent = await res.json();
+
+      const enteredCount = freshEvent.entries.filter((e: RumbleEntry) => e.wrestlerName).length;
+      const activeCount = freshEvent.entries.filter(
+        (e: RumbleEntry) => e.wrestlerName && !e.eliminatedAt && !e.isWinner
+      ).length;
+      hasWinner = freshEvent.entries.some((e: RumbleEntry) => e.isWinner);
+
+      if (hasWinner) break;
+
       const canEnter = enteredCount < 30;
       const canEliminate =
         activeCount >= overlappingSimConfig.minWrestlersBeforeEliminations;
@@ -279,20 +287,8 @@ export default function TestDashboardPage({
 
       const result = await handleTestAction(action);
 
-      if (action === "enter" && result?.success) {
-        enteredCount++;
-        activeCount++;
-      } else if (action === "eliminate") {
-        if (result?.winner) {
-          hasWinner = true;
-        } else if (result?.success) {
-          activeCount--;
-        }
-      }
-
-      if (!result?.success && action === "enter" && result?.complete) {
-        // All wrestlers entered, continue with eliminations only
-        enteredCount = 30;
+      if (result?.winner) {
+        hasWinner = true;
       }
 
       await delay(overlappingSimConfig.tickInterval);

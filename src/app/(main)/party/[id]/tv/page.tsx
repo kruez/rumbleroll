@@ -89,6 +89,10 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
   const prevEntriesRef = useRef<Entry[]>([]);
   const hasAnnouncedWinnerRef = useRef(false);
 
+  // Announcement queue state
+  const [announcementQueue, setAnnouncementQueue] = useState<Array<{type: 'entry' | 'elimination' | 'winner', data: any}>>([]);
+  const processingQueueRef = useRef(false);
+
   const fetchParty = useCallback(async () => {
     try {
       const res = await fetch(`/api/parties/${id}`);
@@ -103,7 +107,30 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     }
   }, [id]);
 
-  // Detect entry/elimination changes and show announcements
+  // Process announcement queue sequentially
+  useEffect(() => {
+    if (announcementQueue.length === 0 || processingQueueRef.current) return;
+
+    processingQueueRef.current = true;
+    const [current, ...rest] = announcementQueue;
+
+    if (current.type === 'entry') {
+      showEntryAnnouncement(current.data);
+    } else if (current.type === 'elimination') {
+      showEliminationAnnouncement(current.data);
+    } else if (current.type === 'winner') {
+      showWinnerAnnouncement(current.data.name, current.data.entryNumber);
+    }
+
+    // Process next after delay (entry: 1.5s, elimination: 2s, winner: 3s)
+    const delay = current.type === 'entry' ? 1500 : current.type === 'elimination' ? 2000 : 3000;
+    setTimeout(() => {
+      setAnnouncementQueue(rest);
+      processingQueueRef.current = false;
+    }, delay);
+  }, [announcementQueue]);
+
+  // Detect entry/elimination changes and queue announcements
   useEffect(() => {
     if (!party) return;
 
@@ -122,15 +149,18 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
 
     // Skip initial load (when prevEntries is empty)
     if (prevEntries.length > 0) {
+      // Collect new announcements to queue
+      const newAnnouncements: Array<{type: 'entry' | 'elimination' | 'winner', data: any}> = [];
+
       // Detect new entries
       for (const entry of entries) {
         const prevEntry = prevEntries.find((e) => e.id === entry.id);
 
         // New entry (wrestler just entered)
         if (entry.wrestlerName && (!prevEntry || !prevEntry.wrestlerName)) {
-          showEntryAnnouncement({
-            wrestlerName: entry.wrestlerName,
-            entryNumber: entry.entryNumber,
+          newAnnouncements.push({
+            type: 'entry',
+            data: { wrestlerName: entry.wrestlerName, entryNumber: entry.entryNumber }
           });
 
           // Set latest entry for green pulse
@@ -178,10 +208,13 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
               setLastActivityParticipant({ id: participantId, type: "elimination" });
             }
 
-            showEliminationAnnouncement({
-              wrestlerName: entry.wrestlerName,
-              eliminatedBy: entry.eliminatedBy,
-              entryNumber: entry.entryNumber,
+            newAnnouncements.push({
+              type: 'elimination',
+              data: {
+                wrestlerName: entry.wrestlerName,
+                eliminatedBy: entry.eliminatedBy,
+                entryNumber: entry.entryNumber,
+              }
             });
           }
         }
@@ -190,9 +223,17 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
         if (entry.isWinner && (!prevEntry || !prevEntry.isWinner) && !hasAnnouncedWinnerRef.current) {
           hasAnnouncedWinnerRef.current = true;
           if (entry.wrestlerName) {
-            showWinnerAnnouncement(entry.wrestlerName, entry.entryNumber);
+            newAnnouncements.push({
+              type: 'winner',
+              data: { name: entry.wrestlerName, entryNumber: entry.entryNumber }
+            });
           }
         }
+      }
+
+      // Add all new announcements to the queue
+      if (newAnnouncements.length > 0) {
+        setAnnouncementQueue(prev => [...prev, ...newAnnouncements]);
       }
     }
 
@@ -376,11 +417,15 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
       const participantEntries = p.assignments.map((a) =>
         entries.find((e) => e.entryNumber === a.entryNumber)
       );
-      const allEntered = participantEntries.every((e) => e?.wrestlerName);
-      const allEliminated = participantEntries.every((e) => e?.eliminatedAt);
+      // Check if there are any entries that have wrestlers and are NOT eliminated
+      const hasActiveOrWaiting = participantEntries.some((e) =>
+        !e?.wrestlerName || (e?.wrestlerName && !e?.eliminatedAt && !e?.isWinner)
+      );
       const hasWinner = participantEntries.some((e) => e?.isWinner);
+      const hasEliminated = participantEntries.some((e) => e?.eliminatedAt);
 
-      if (allEntered && allEliminated && !hasWinner && !ejectedPlayers.has(p.id) && !ejectingPlayers.has(p.id)) {
+      // Eject if NO active/waiting entries and no winner (but at least one was eliminated)
+      if (!hasActiveOrWaiting && !hasWinner && hasEliminated && !ejectedPlayers.has(p.id) && !ejectingPlayers.has(p.id)) {
         setEjectingPlayers((prev) => new Set(prev).add(p.id));
         setTimeout(() => {
           setEjectingPlayers((prev) => {
@@ -692,13 +737,6 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
               {standings
                 .filter((p) => !ejectedPlayers.has(p.id))
                 .map((p, idx) => {
-                  const activeNumbers = p.assignments
-                    .filter((a) => {
-                      const entry = entries.find(e => e.entryNumber === a.entryNumber);
-                      return entry?.wrestlerName && !entry?.eliminatedAt;
-                    })
-                    .map((a) => a.entryNumber);
-
                   const isEjecting = ejectingPlayers.has(p.id);
                   const hasActivityPulse = lastActivityParticipant?.id === p.id;
                   const activityType = lastActivityParticipant?.type;
@@ -735,11 +773,17 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
                       <div className="flex-1">
                         <p className="text-white font-bold text-lg">{p.displayName}</p>
                         <div className="flex gap-1 flex-wrap">
-                          {activeNumbers.map((num) => (
-                            <Badge key={num} className="bg-green-600 text-xs">
-                              #{num}
-                            </Badge>
-                          ))}
+                          {p.assignments
+                            .map((a) => {
+                              const entry = entries.find(e => e.entryNumber === a.entryNumber);
+                              return { num: a.entryNumber, entry };
+                            })
+                            .filter(({ entry }) => entry?.wrestlerName && !entry?.eliminatedAt)
+                            .map(({ num, entry }) => (
+                              <Badge key={num} className="bg-green-600 text-xs">
+                                #{num} {entry!.wrestlerName}
+                              </Badge>
+                            ))}
                         </div>
                         <p className="text-xs text-gray-400 mt-1">
                           {p.waitingCount} waiting | {p.activeCount} active | {p.eliminatedCount} eliminated
@@ -844,7 +888,6 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
               <Badge className="bg-red-500">
                 {entries.filter((e) => e.eliminatedAt).length}
               </Badge>
-              <span className="text-xs text-gray-500 font-normal ml-auto">(newest first)</span>
             </h2>
             <div className="space-y-3 overflow-y-auto max-h-[calc(100%-3rem)]">
               {recentEliminations.length === 0 ? (
@@ -873,11 +916,6 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-lg font-bold text-red-400">#{entry.entryNumber}</span>
                         <span className="text-white font-medium">{entry.wrestlerName}</span>
-                        {isLatest && (
-                          <Badge className="bg-red-600 text-white text-xs ml-auto animate-pulse">
-                            LATEST
-                          </Badge>
-                        )}
                       </div>
                       <p className="text-gray-400 text-sm">
                         by <span className="text-red-300">{entry.eliminatedBy}</span>

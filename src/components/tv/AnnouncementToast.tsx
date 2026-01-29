@@ -36,7 +36,7 @@ export function showEntryAnnouncement({
     ),
     {
       duration: 3000,
-      position: "top-center",
+      position: "top-left",
       className: "!w-full !max-w-2xl",
     }
   );
@@ -66,7 +66,7 @@ export function showEliminationAnnouncement({
     ),
     {
       duration: 4000,
-      position: "top-center",
+      position: "top-right",
       className: "!w-full !max-w-2xl",
     }
   );
