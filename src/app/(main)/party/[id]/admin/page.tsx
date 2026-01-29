@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { Header } from "@/components/Header";
 import { UserAvatar } from "@/components/UserAvatar";
+import { ScoreboardDropdown } from "@/components/ScoreboardDropdown";
 
 interface Entry {
   id: string;
@@ -198,11 +199,7 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
               <h1 className="text-2xl font-bold text-white">Host Controls</h1>
               <p className="text-gray-400">{party.name} - {party.event.name}</p>
             </div>
-            <Link href={`/party/${id}/tv`}>
-              <Button variant="outline" className="bg-transparent border-white text-white hover:bg-white/10">
-                Open Scoreboard
-              </Button>
-            </Link>
+            <ScoreboardDropdown partyId={id} />
           </div>
         </div>
       </div>

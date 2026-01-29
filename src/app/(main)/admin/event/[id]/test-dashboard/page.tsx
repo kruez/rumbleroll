@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Header } from "@/components/Header";
+import { ScoreboardDropdown } from "@/components/ScoreboardDropdown";
 
 interface RumbleEntry {
   id: string;
@@ -386,15 +387,7 @@ export default function TestDashboardPage({
                   >
                     Open Lobby
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="bg-transparent border-blue-500 text-blue-400 hover:bg-blue-500/10"
-                    onClick={() =>
-                      window.open(`/party/${party.id}/tv`, "_blank")
-                    }
-                  >
-                    Open Scoreboard
-                  </Button>
+                  <ScoreboardDropdown partyId={party.id} />
                 </>
               )}
             </div>

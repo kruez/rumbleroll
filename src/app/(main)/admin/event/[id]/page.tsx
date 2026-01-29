@@ -248,6 +248,18 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
               <p className="text-gray-400">{event._count.parties} parties using this event</p>
             </div>
             <div className="flex items-center gap-3">
+              {/* Test Simulation Button */}
+              {event.isTest && (
+                <Link href={`/admin/event/${id}/test-dashboard`}>
+                  <Button
+                    variant="outline"
+                    className="border-orange-500 text-orange-400 hover:bg-orange-500/20"
+                  >
+                    Open Simulation
+                  </Button>
+                </Link>
+              )}
+
               {/* Status Action Button */}
               {event.status === "NOT_STARTED" && (
                 <Button

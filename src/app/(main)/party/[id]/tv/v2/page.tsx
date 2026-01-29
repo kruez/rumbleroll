@@ -404,6 +404,9 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
   const entries = party.event.entries;
   const winner = entries.find((e) => e.isWinner);
 
+  // Find the next upcoming entry (first entry without a wrestler name)
+  const nextUpEntryNumber = entries.find(e => !e.wrestlerName)?.entryNumber ?? null;
+
   const getParticipantForEntry = (entryNumber: number) => {
     for (const p of party.participants) {
       if (p.assignments.some((a) => a.entryNumber === entryNumber)) {
@@ -581,11 +584,11 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
             const isShowingSkull = entry ? skullAnimatingEntries.has(entry.id) : false;
             const isLatestEntry = entry ? latestEntryId === entry.id : false;
 
-            // Get a muted version of the player color for pending state (lower opacity)
+            // Get a muted version of the player color for pending state (higher opacity than before)
             const playerColorMuted = participantId ? {
-              bg: playerColor.bg.replace('/50', '/30'),
+              bg: playerColor.bg.replace('/50', '/40'),
               border: playerColor.border,
-            } : { bg: 'bg-gray-700/30', border: 'border-gray-600' };
+            } : { bg: 'bg-gray-700/40', border: 'border-gray-600' };
 
             // Determine card styling based on state
             let cardClasses = "";
@@ -595,14 +598,14 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
               cardClasses = "bg-yellow-500/40 border-2 border-yellow-400 ring-2 ring-yellow-400";
             } else if (state === "eliminated") {
               if (isShowingSkull) {
-                // During skull animation - dim the card but keep player color
-                cardClasses = `${playerColor.bg.replace('/50', '/20')} border ${playerColor.border} opacity-60`;
+                // During skull animation - keep full player color
+                cardClasses = `${playerColor.bg} border ${playerColor.border} opacity-75`;
               } else if (isAnimatingOut) {
                 // Brief transition after skull
-                cardClasses = `${playerColor.bg.replace('/50', '/20')} border ${playerColor.border} opacity-50`;
+                cardClasses = `${playerColor.bg} border ${playerColor.border} opacity-75`;
               } else {
-                // Final eliminated state - keep player color with overlay and muted appearance
-                cardClasses = `${playerColor.bg.replace('/50', '/20')} border ${playerColor.border} opacity-60`;
+                // Final eliminated state - keep full player color with slight dim
+                cardClasses = `${playerColor.bg} border ${playerColor.border} opacity-75`;
               }
             } else if (state === "active") {
               cardClasses = `${playerColor.bg} border-2 ${playerColor.border}`;
@@ -610,8 +613,12 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                 animationClass = "animate-[pulseGlowGreen_2s_ease-in-out_infinite]";
               }
             } else {
-              // Pending state - use muted player color
-              cardClasses = `${playerColorMuted.bg} border ${playerColorMuted.border} opacity-50`;
+              // Pending state - use muted player color with improved visibility
+              cardClasses = `${playerColorMuted.bg} border-2 ${playerColorMuted.border} opacity-70`;
+              // Add pulsating animation for the next upcoming entry
+              if (num === nextUpEntryNumber) {
+                animationClass = "animate-[pulseGlowExcitement_1.5s_ease-in-out_infinite]";
+              }
             }
 
             return (
@@ -628,13 +635,20 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                   </div>
                 )}
 
+                {/* Persistent faded skull for eliminated entries */}
+                {state === "eliminated" && !isShowingSkull && (
+                  <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none opacity-30">
+                    <span className="text-4xl">💀</span>
+                  </div>
+                )}
+
                 {/* Entry Number - always visible */}
                 <div className="flex items-center justify-between mb-1">
                   <span className={`text-2xl font-bold ${
                     state === "winner" ? "text-yellow-300" :
-                    state === "eliminated" ? playerColor.text + " opacity-60" :
+                    state === "eliminated" ? playerColor.text + " opacity-70" :
                     state === "active" ? playerColor.text :
-                    playerColor.text + " opacity-70"
+                    playerColor.text + " opacity-80"
                   }`}>
                     {num}
                   </span>
@@ -659,11 +673,11 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                 </div>
 
                 {/* Player Name - larger text */}
-                <p className={`text-base truncate ${
-                  state === "winner" ? "text-yellow-200" :
-                  state === "eliminated" ? playerColor.text + " opacity-50" :
-                  state === "active" ? "text-white/80" :
-                  playerColor.text + " opacity-60"
+                <p className={`truncate ${
+                  state === "winner" ? "text-base text-yellow-200" :
+                  state === "eliminated" ? "text-base " + playerColor.text + " opacity-70" :
+                  state === "active" ? "text-base text-white/80" :
+                  "text-lg " + playerColor.text + " opacity-80"
                 }`}>
                   {participantInfo?.name || "Unassigned"}
                 </p>
@@ -672,7 +686,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                 {entry?.wrestlerName && (
                   <p className={`text-xl font-semibold truncate mt-auto ${
                     state === "winner" ? "text-white" :
-                    state === "eliminated" ? "text-white/40" :
+                    state === "eliminated" ? "text-white/70" :
                     "text-white"
                   }`}>
                     {entry.wrestlerName}
