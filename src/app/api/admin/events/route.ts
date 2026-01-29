@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { generateInviteCode } from "@/utils/inviteCode";
+
+// Test player names for simulation
+const TEST_PLAYER_NAMES = [
+  "Test Player 1",
+  "Test Player 2",
+  "Test Player 3",
+  "Test Player 4",
+  "Test Player 5",
+];
 
 // GET /api/admin/events - List all events
 export async function GET() {
@@ -32,7 +42,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { name, year } = await request.json();
+    const { name, year, isTest } = await request.json();
 
     if (!name || !year) {
       return NextResponse.json({ error: "Name and year are required" }, { status: 400 });
@@ -55,6 +65,86 @@ export async function POST(request: Request) {
         entries: { orderBy: { entryNumber: "asc" } },
       },
     });
+
+    // If this is a test simulation, set up the test environment
+    if (isTest) {
+      // Generate unique invite code
+      let inviteCode = generateInviteCode();
+      let attempts = 0;
+      while (attempts < 10) {
+        const existing = await prisma.party.findUnique({ where: { inviteCode } });
+        if (!existing) break;
+        inviteCode = generateInviteCode();
+        attempts++;
+      }
+
+      // Create test party with 5 test users
+      const testParty = await prisma.party.create({
+        data: {
+          name: `Test Party - ${name}`,
+          inviteCode,
+          hostId: session.user.id,
+          eventId: event.id,
+          status: "NUMBERS_ASSIGNED",
+        },
+      });
+
+      // Create test users if they don't exist, then add as participants
+      const testUsers = [];
+      for (const playerName of TEST_PLAYER_NAMES) {
+        const email = `${playerName.toLowerCase().replace(/\s+/g, "")}@test.local`;
+        let user = await prisma.user.findUnique({ where: { email } });
+        if (!user) {
+          user = await prisma.user.create({
+            data: {
+              email,
+              name: playerName,
+              password: "test-password-not-for-login", // Not a real login
+            },
+          });
+        }
+        testUsers.push(user);
+
+        // Add as participant
+        await prisma.partyParticipant.create({
+          data: {
+            partyId: testParty.id,
+            userId: user.id,
+          },
+        });
+      }
+
+      // Get all participants
+      const participants = await prisma.partyParticipant.findMany({
+        where: { partyId: testParty.id },
+      });
+
+      // Distribute numbers (6 numbers per player for 5 players = 30 numbers)
+      const numbers = Array.from({ length: 30 }, (_, i) => i + 1);
+      // Shuffle numbers
+      for (let i = numbers.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
+      }
+
+      // Assign numbers round-robin style
+      for (let i = 0; i < numbers.length; i++) {
+        const participant = participants[i % participants.length];
+        await prisma.numberAssignment.create({
+          data: {
+            entryNumber: numbers[i],
+            participantId: participant.id,
+            partyId: testParty.id,
+          },
+        });
+      }
+
+      return NextResponse.json({
+        ...event,
+        party: testParty,
+        testDashboardUrl: `/admin/event/${event.id}/test-dashboard?partyId=${testParty.id}`,
+      });
+    }
 
     return NextResponse.json(event);
   } catch (error) {

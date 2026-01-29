@@ -9,6 +9,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Header } from "@/components/Header";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface RumbleEntry {
   id: string;
@@ -42,6 +50,10 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
   const [testModeOpen, setTestModeOpen] = useState(false);
   const [testModeLoading, setTestModeLoading] = useState(false);
   const [simulatingEliminations, setSimulatingEliminations] = useState(false);
+  const [endEventDialogOpen, setEndEventDialogOpen] = useState(false);
+  const [endEventConfirmDialogOpen, setEndEventConfirmDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -142,6 +154,49 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
     }
   };
 
+  const handleEndEvent = () => {
+    const hasWinner = event?.entries.some((e) => e.isWinner);
+    if (!hasWinner) {
+      setEndEventDialogOpen(true);
+    } else {
+      handleUpdateStatus("COMPLETED");
+    }
+  };
+
+  const handleEndEventConfirm = () => {
+    setEndEventDialogOpen(false);
+    if (event && event._count.parties > 1) {
+      setEndEventConfirmDialogOpen(true);
+    } else {
+      handleUpdateStatus("COMPLETED");
+    }
+  };
+
+  const handleEndEventFinalConfirm = () => {
+    setEndEventConfirmDialogOpen(false);
+    handleUpdateStatus("COMPLETED");
+  };
+
+  const handleDeleteEvent = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/events/${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        router.push("/admin");
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to delete event");
+      }
+    } catch (error) {
+      console.error("Failed to delete event:", error);
+    } finally {
+      setDeleting(false);
+      setDeleteDialogOpen(false);
+    }
+  };
+
   const handleTestAction = async (action: "fill" | "eliminate" | "reset") => {
     setTestModeLoading(true);
     try {
@@ -222,29 +277,39 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
               <h1 className="text-2xl font-bold text-white">{event.name}</h1>
               <p className="text-gray-400">{event._count.parties} parties using this event</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              {/* Status Action Button */}
+              {event.status === "NOT_STARTED" && (
+                <Button
+                  onClick={() => handleUpdateStatus("IN_PROGRESS")}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  Start Event
+                </Button>
+              )}
+              {event.status === "IN_PROGRESS" && (
+                <Button
+                  onClick={handleEndEvent}
+                  className="bg-yellow-600 hover:bg-yellow-700 text-black"
+                >
+                  End Event
+                </Button>
+              )}
+              {event.status === "COMPLETED" && (
+                <Badge className="bg-blue-600 text-white px-4 py-2 text-sm">
+                  Completed
+                </Badge>
+              )}
+
+              {/* Delete Button */}
               <Button
-                variant={event.status === "NOT_STARTED" ? "default" : "outline"}
-                onClick={() => handleUpdateStatus("NOT_STARTED")}
-                disabled={event.status !== "NOT_STARTED"}
-                className={event.status === "NOT_STARTED" ? "bg-gray-600" : "bg-transparent border-gray-500 text-gray-300"}
+                variant="destructive"
+                onClick={() => setDeleteDialogOpen(true)}
+                disabled={event._count.parties > 0}
+                title={event._count.parties > 0 ? "Cannot delete: event has parties using it" : "Delete event"}
+                className={event._count.parties > 0 ? "opacity-50 cursor-not-allowed" : ""}
               >
-                Not Started
-              </Button>
-              <Button
-                variant={event.status === "IN_PROGRESS" ? "default" : "outline"}
-                onClick={() => handleUpdateStatus("IN_PROGRESS")}
-                disabled={event.status === "COMPLETED"}
-                className={event.status === "IN_PROGRESS" ? "bg-green-600 hover:bg-green-700" : "bg-transparent border-green-500 text-green-400 hover:bg-green-500/10"}
-              >
-                {event.status === "NOT_STARTED" ? "Start Event" : "In Progress"}
-              </Button>
-              <Button
-                variant={event.status === "COMPLETED" ? "default" : "outline"}
-                disabled={!winner}
-                className={event.status === "COMPLETED" ? "bg-yellow-600" : "bg-transparent border-yellow-500 text-yellow-400"}
-              >
-                Completed
+                Delete Event
               </Button>
             </div>
           </div>
@@ -537,6 +602,88 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
           </CardContent>
         </Card>
       </main>
+
+      {/* End Event Warning Dialog (no winner) */}
+      <Dialog open={endEventDialogOpen} onOpenChange={setEndEventDialogOpen}>
+        <DialogContent className="bg-gray-800 border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">End Event Without Winner?</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              No winner has been declared. Are you sure you want to end this event?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setEndEventDialogOpen(false)}
+              className="bg-transparent border-gray-500 text-gray-300 hover:bg-gray-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEndEventConfirm}
+              className="bg-yellow-600 hover:bg-yellow-700 text-black"
+            >
+              End Anyway
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* End Event Confirmation Dialog (multiple parties) */}
+      <Dialog open={endEventConfirmDialogOpen} onOpenChange={setEndEventConfirmDialogOpen}>
+        <DialogContent className="bg-gray-800 border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Confirm End Event</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              This event has {event._count.parties} parties watching it. Ending will affect all of them. Continue?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setEndEventConfirmDialogOpen(false)}
+              className="bg-transparent border-gray-500 text-gray-300 hover:bg-gray-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEndEventFinalConfirm}
+              className="bg-yellow-600 hover:bg-yellow-700 text-black"
+            >
+              Yes, End Event
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Event Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="bg-gray-800 border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Delete Event?</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Are you sure you want to delete &quot;{event.name}&quot;? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              className="bg-transparent border-gray-500 text-gray-300 hover:bg-gray-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteEvent}
+              disabled={deleting}
+            >
+              {deleting ? "Deleting..." : "Delete Event"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

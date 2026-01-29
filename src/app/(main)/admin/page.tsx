@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Header } from "@/components/Header";
 
 interface RumbleEvent {
@@ -28,6 +29,7 @@ export default function AdminPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newEventName, setNewEventName] = useState("");
   const [newEventYear, setNewEventYear] = useState(new Date().getFullYear());
+  const [isTestSimulation, setIsTestSimulation] = useState(false);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -60,13 +62,24 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newEventName, year: newEventYear }),
+        body: JSON.stringify({
+          name: newEventName,
+          year: newEventYear,
+          isTest: isTestSimulation,
+        }),
       });
 
       if (res.ok) {
+        const data = await res.json();
         setCreateDialogOpen(false);
         setNewEventName("");
-        fetchEvents();
+        setIsTestSimulation(false);
+
+        if (isTestSimulation && data.testDashboardUrl) {
+          router.push(data.testDashboardUrl);
+        } else {
+          fetchEvents();
+        }
       }
     } catch (error) {
       console.error("Failed to create event:", error);
@@ -144,12 +157,31 @@ export default function AdminPage() {
                     onChange={(e) => setNewEventYear(parseInt(e.target.value))}
                   />
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="testSimulation"
+                    checked={isTestSimulation}
+                    onCheckedChange={(checked) => setIsTestSimulation(checked === true)}
+                  />
+                  <Label
+                    htmlFor="testSimulation"
+                    className="text-sm font-normal cursor-pointer"
+                  >
+                    Set up as test simulation
+                  </Label>
+                </div>
+                {isTestSimulation && (
+                  <p className="text-xs text-gray-500">
+                    Creates a test party with 5 players and distributed numbers.
+                    You&apos;ll be redirected to a test dashboard.
+                  </p>
+                )}
                 <Button
                   onClick={handleCreateEvent}
                   className="w-full"
                   disabled={creating || !newEventName.trim()}
                 >
-                  {creating ? "Creating..." : "Create Event"}
+                  {creating ? "Creating..." : isTestSimulation ? "Create Test Event" : "Create Event"}
                 </Button>
               </div>
             </DialogContent>
