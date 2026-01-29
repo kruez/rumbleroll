@@ -11,6 +11,7 @@ export async function GET() {
     }
 
     const events = await prisma.rumbleEvent.findMany({
+      where: { isTest: false },
       select: {
         id: true,
         name: true,

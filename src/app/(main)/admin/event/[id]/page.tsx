@@ -48,9 +48,7 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
   const [wrestlerInput, setWrestlerInput] = useState("");
   const [eliminatedByInput, setEliminatedByInput] = useState("");
   const [saving, setSaving] = useState(false);
-  const [testModeOpen, setTestModeOpen] = useState(false);
-  const [testModeLoading, setTestModeLoading] = useState(false);
-  const [simulatingEliminations, setSimulatingEliminations] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [endEventDialogOpen, setEndEventDialogOpen] = useState(false);
   const [endEventConfirmDialogOpen, setEndEventConfirmDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -198,51 +196,22 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
     }
   };
 
-  const handleTestAction = async (action: "fill" | "eliminate" | "reset") => {
-    setTestModeLoading(true);
+  const handleResetEvent = async () => {
+    setResetting(true);
     try {
       const res = await fetch(`/api/admin/events/${id}/test`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action: "reset" }),
       });
       if (res.ok) {
         fetchEvent();
       }
     } catch (error) {
-      console.error("Test mode action failed:", error);
+      console.error("Failed to reset event:", error);
     } finally {
-      setTestModeLoading(false);
+      setResetting(false);
     }
-  };
-
-  const simulateEliminations = async () => {
-    setSimulatingEliminations(true);
-    const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-    // Keep eliminating until there's a winner or error
-    let shouldContinue = true;
-    while (shouldContinue) {
-      try {
-        const res = await fetch(`/api/admin/events/${id}/test`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "eliminate" }),
-        });
-        const data = await res.json();
-
-        if (!res.ok || data.winner) {
-          shouldContinue = false;
-        }
-
-        fetchEvent();
-        await delay(1000); // 1 second between eliminations
-      } catch {
-        shouldContinue = false;
-      }
-    }
-
-    setSimulatingEliminations(false);
   };
 
   if (status === "loading" || loading) {
@@ -302,13 +271,31 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
                 </Badge>
               )}
 
+              {/* Reset Button for completed test events */}
+              {event.isTest && event.status === "COMPLETED" && (
+                <Button
+                  variant="outline"
+                  onClick={handleResetEvent}
+                  disabled={resetting}
+                  className="border-orange-500 text-orange-400 hover:bg-orange-500/20"
+                >
+                  {resetting ? "Resetting..." : "Reset for Re-simulation"}
+                </Button>
+              )}
+
               {/* Delete Button */}
               <Button
                 variant="destructive"
                 onClick={() => setDeleteDialogOpen(true)}
-                disabled={event._count.parties > 0}
-                title={event._count.parties > 0 ? "Cannot delete: event has parties using it" : "Delete event"}
-                className={event._count.parties > 0 ? "opacity-50 cursor-not-allowed" : ""}
+                disabled={!event.isTest && event._count.parties > 0}
+                title={
+                  !event.isTest && event._count.parties > 0
+                    ? "Cannot delete: event has parties using it"
+                    : event.isTest && event._count.parties > 0
+                    ? "Will also delete associated test parties"
+                    : "Delete event"
+                }
+                className={!event.isTest && event._count.parties > 0 ? "opacity-50 cursor-not-allowed" : ""}
               >
                 Delete Event
               </Button>
@@ -431,72 +418,6 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
               <p className="text-blue-300 text-lg">Start the event before adding wrestlers</p>
               <p className="text-gray-400 text-sm mt-2">Click the "Start Event" button above to begin</p>
             </CardContent>
-          </Card>
-        )}
-
-        {/* Test Mode Section - Only show for test events */}
-        {event.isTest && (
-          <Card className="bg-gray-800/50 border-gray-700 mb-8">
-            <CardHeader
-              className="cursor-pointer"
-              onClick={() => setTestModeOpen(!testModeOpen)}
-            >
-              <CardTitle className="text-white flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  Test Mode
-                  <Badge variant="outline" className="text-orange-400 border-orange-400">
-                    Demo
-                  </Badge>
-                </span>
-                <span className="text-gray-400 text-sm">
-                  {testModeOpen ? "▼" : "▶"}
-                </span>
-              </CardTitle>
-            </CardHeader>
-            {testModeOpen && (
-              <CardContent className="space-y-4">
-                <p className="text-gray-400 text-sm">
-                  Use these tools to quickly test the event flow with auto-generated data.
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    onClick={() => handleTestAction("fill")}
-                    disabled={testModeLoading || simulatingEliminations || enteredCount === 30}
-                    className="bg-purple-600 hover:bg-purple-700"
-                  >
-                    {testModeLoading ? "Working..." : "Auto-fill All Wrestlers"}
-                  </Button>
-                  <Button
-                    onClick={() => handleTestAction("eliminate")}
-                    disabled={testModeLoading || simulatingEliminations || activeCount === 0}
-                    variant="destructive"
-                  >
-                    {testModeLoading ? "Working..." : "Eliminate Random Wrestler"}
-                  </Button>
-                  <Button
-                    onClick={simulateEliminations}
-                    disabled={testModeLoading || simulatingEliminations || activeCount < 2}
-                    className="bg-orange-600 hover:bg-orange-700"
-                  >
-                    {simulatingEliminations ? "Simulating..." : "Simulate Until Winner"}
-                  </Button>
-                  <Button
-                    onClick={() => handleTestAction("reset")}
-                    disabled={testModeLoading || simulatingEliminations}
-                    variant="outline"
-                    className="bg-transparent border-gray-500 text-gray-300 hover:bg-gray-700"
-                  >
-                    {testModeLoading ? "Working..." : "Reset Event"}
-                  </Button>
-                </div>
-                {simulatingEliminations && (
-                  <div className="flex items-center gap-2 text-orange-400">
-                    <div className="animate-spin h-4 w-4 border-2 border-orange-400 border-t-transparent rounded-full" />
-                    <span>Simulating eliminations... {activeCount} wrestlers remaining</span>
-                  </div>
-                )}
-              </CardContent>
-            )}
           </Card>
         )}
 

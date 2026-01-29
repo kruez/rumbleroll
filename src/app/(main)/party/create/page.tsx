@@ -135,6 +135,12 @@ export default function CreatePartyPage() {
                   <div className="text-yellow-400 text-sm">
                     No events available. Please contact an admin to create one.
                   </div>
+                ) : events.length === 1 ? (
+                  <div className="bg-gray-900 border border-gray-600 rounded-md px-3 py-2 text-white">
+                    {events[0].name} ({events[0].year})
+                    {events[0].status === "IN_PROGRESS" && " - Live"}
+                    {events[0].status === "COMPLETED" && " - Finished"}
+                  </div>
                 ) : (
                   <Select value={eventId} onValueChange={setEventId}>
                     <SelectTrigger className="bg-gray-900 border-gray-600 text-white">
