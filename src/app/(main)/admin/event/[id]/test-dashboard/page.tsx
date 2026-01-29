@@ -611,44 +611,29 @@ export default function TestDashboardPage({
               {customSpeed && (
                 <div className="flex items-center gap-4 p-3 bg-gray-700/50 rounded-lg">
                   <div className="flex items-center gap-2">
-                    <label className="text-gray-400 text-sm">Entry delay:</label>
+                    <label className="text-gray-400 text-sm">Time between entries:</label>
                     <input
                       type="number"
                       value={simSpeed.entryDelay / 1000}
-                      onChange={(e) => setSimSpeed(prev => ({ ...prev, entryDelay: parseFloat(e.target.value) * 1000 }))}
-                      className="w-20 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm"
-                      min="0.1"
-                      step="0.5"
+                      onChange={(e) => {
+                        const entryDelay = parseFloat(e.target.value) * 1000;
+                        // Derive other timings: elimination ~1.5x entry, tick ~0.6x entry
+                        setSimSpeed({
+                          entryDelay,
+                          eliminationDelay: Math.round(entryDelay * 1.5),
+                          tickInterval: Math.round(entryDelay * 0.6),
+                        });
+                      }}
+                      className="w-24 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm"
+                      min="0.5"
+                      step="1"
                       disabled={simulationRunning}
                     />
-                    <span className="text-gray-500 text-sm">sec</span>
+                    <span className="text-gray-500 text-sm">seconds</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-gray-400 text-sm">Elimination delay:</label>
-                    <input
-                      type="number"
-                      value={simSpeed.eliminationDelay / 1000}
-                      onChange={(e) => setSimSpeed(prev => ({ ...prev, eliminationDelay: parseFloat(e.target.value) * 1000 }))}
-                      className="w-20 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm"
-                      min="0.1"
-                      step="0.5"
-                      disabled={simulationRunning}
-                    />
-                    <span className="text-gray-500 text-sm">sec</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-gray-400 text-sm">Tick interval:</label>
-                    <input
-                      type="number"
-                      value={simSpeed.tickInterval / 1000}
-                      onChange={(e) => setSimSpeed(prev => ({ ...prev, tickInterval: parseFloat(e.target.value) * 1000 }))}
-                      className="w-20 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm"
-                      min="0.1"
-                      step="0.5"
-                      disabled={simulationRunning}
-                    />
-                    <span className="text-gray-500 text-sm">sec</span>
-                  </div>
+                  <span className="text-gray-500 text-xs">
+                    (e.g., 90 for realistic Royal Rumble timing)
+                  </span>
                 </div>
               )}
             </div>

@@ -122,8 +122,6 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     wrestlerName?: string;
     participantId: string;
   } | null>(null);
-  const upNextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastProcessedEntryRef = useRef<string | null>(null);
 
   // Track previous entries for detecting changes
   const prevEntriesRef = useRef<Entry[]>([]);
@@ -319,9 +317,10 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     return sorted.find(e => !e.wrestlerName) ?? null;
   }, [party]);
 
-  // Up Next badge management - simplified to avoid stale closures
-  // Track if we've initialized the badge
-  const upNextInitializedRef = useRef(false);
+  // Up Next badge management
+  // Track the last entry number we showed as "entered" to detect new entries
+  const lastShownEntryNumberRef = useRef<number>(0);
+  const enteredDisplayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!party) return;
@@ -332,34 +331,44 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     // Hide badge when all 30 entered
     if (enteredCount >= 30) {
       setUpNextMode("hidden");
+      if (enteredDisplayTimeoutRef.current) {
+        clearTimeout(enteredDisplayTimeoutRef.current);
+      }
       return;
     }
 
-    // Find the most recently entered wrestler (not yet processed)
-    const recentEntry = entries
-      .filter(e => e.wrestlerName && e.id !== lastProcessedEntryRef.current)
-      .sort((a, b) => new Date(b.enteredAt!).getTime() - new Date(a.enteredAt!).getTime())[0];
+    // Find the highest entry number that has entered
+    const highestEntered = entries
+      .filter(e => e.wrestlerName)
+      .sort((a, b) => b.entryNumber - a.entryNumber)[0];
 
-    if (recentEntry && recentEntry.id !== lastProcessedEntryRef.current) {
-      // Show "entered" state
-      lastProcessedEntryRef.current = recentEntry.id;
-      const participantInfo = getParticipantInfoForEntry(recentEntry.entryNumber);
+    // Find next pending entry (lowest entry number without a wrestler)
+    const nextPending = entries
+      .filter(e => !e.wrestlerName)
+      .sort((a, b) => a.entryNumber - b.entryNumber)[0];
+
+    // Check if a new wrestler just entered (higher than what we last showed)
+    if (highestEntered && highestEntered.entryNumber > lastShownEntryNumberRef.current) {
+      // New entry detected - show "entered" state
+      lastShownEntryNumberRef.current = highestEntered.entryNumber;
+      const participantInfo = getParticipantInfoForEntry(highestEntered.entryNumber);
+
       if (participantInfo) {
         setDisplayedEntry({
-          entryNumber: recentEntry.entryNumber,
+          entryNumber: highestEntered.entryNumber,
           participantName: participantInfo.name,
-          wrestlerName: recentEntry.wrestlerName ?? undefined,
+          wrestlerName: highestEntered.wrestlerName ?? undefined,
           participantId: participantInfo.id,
         });
         setUpNextMode("entered");
 
-        // Clear timeout and set new one
-        if (upNextTimeoutRef.current) clearTimeout(upNextTimeoutRef.current);
-        upNextTimeoutRef.current = setTimeout(() => {
-          // Transition to next pending (compute fresh from current party state)
-          const nextPending = party.event.entries
-            .filter(e => !e.wrestlerName)
-            .sort((a, b) => a.entryNumber - b.entryNumber)[0];
+        // Clear any existing timeout
+        if (enteredDisplayTimeoutRef.current) {
+          clearTimeout(enteredDisplayTimeoutRef.current);
+        }
+
+        // After 3 seconds, switch to showing next pending
+        enteredDisplayTimeoutRef.current = setTimeout(() => {
           if (nextPending) {
             const nextInfo = getParticipantInfoForEntry(nextPending.entryNumber);
             if (nextInfo) {
@@ -373,17 +382,13 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
           } else {
             setUpNextMode("hidden");
           }
-        }, 10000);
+        }, 3000);
       }
-    } else if (!upNextInitializedRef.current) {
-      // Initial state - show next pending
-      upNextInitializedRef.current = true;
-      const nextPending = entries
-        .filter(e => !e.wrestlerName)
-        .sort((a, b) => a.entryNumber - b.entryNumber)[0];
+    } else if (upNextMode === "pending" || (upNextMode === "hidden" && nextPending)) {
+      // We're in pending mode or need to initialize - show next pending
       if (nextPending) {
         const info = getParticipantInfoForEntry(nextPending.entryNumber);
-        if (info) {
+        if (info && (displayedEntry?.entryNumber !== nextPending.entryNumber || upNextMode === "hidden")) {
           setDisplayedEntry({
             entryNumber: nextPending.entryNumber,
             participantName: info.name,
@@ -395,11 +400,11 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     }
 
     return () => {
-      if (upNextTimeoutRef.current) {
-        clearTimeout(upNextTimeoutRef.current);
+      if (enteredDisplayTimeoutRef.current) {
+        clearTimeout(enteredDisplayTimeoutRef.current);
       }
     };
-  }, [party, getParticipantInfoForEntry]);
+  }, [party, getParticipantInfoForEntry, upNextMode, displayedEntry?.entryNumber]);
 
   // Auto-trigger winner celebration when winner is detected
   useEffect(() => {
