@@ -319,8 +319,17 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
 
   // Up Next badge management
   const lastShownEntryNumberRef = useRef<number>(0);
-  const [showingEntered, setShowingEntered] = useState(false);
-  const enteredDisplayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const enteredTimestampRef = useRef<number>(0);
+  const enteredTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup timeout on unmount only
+  useEffect(() => {
+    return () => {
+      if (enteredTimeoutRef.current) {
+        clearTimeout(enteredTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!party) return;
@@ -331,8 +340,9 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     // Hide badge when all 30 entered
     if (enteredCount >= 30) {
       setUpNextMode("hidden");
-      if (enteredDisplayTimeoutRef.current) {
-        clearTimeout(enteredDisplayTimeoutRef.current);
+      if (enteredTimeoutRef.current) {
+        clearTimeout(enteredTimeoutRef.current);
+        enteredTimeoutRef.current = null;
       }
       return;
     }
@@ -347,11 +357,19 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
       .filter(e => !e.wrestlerName)
       .sort((a, b) => a.entryNumber - b.entryNumber)[0];
 
+    const now = Date.now();
+    const inEnteredWindow = now - enteredTimestampRef.current < 3000;
+
     // Check if a new wrestler just entered (higher than what we last showed)
     if (highestEntered && highestEntered.entryNumber > lastShownEntryNumberRef.current) {
       // New entry detected - show "entered" state
       lastShownEntryNumberRef.current = highestEntered.entryNumber;
-      setShowingEntered(true);
+      enteredTimestampRef.current = now;
+
+      // Clear any existing timeout
+      if (enteredTimeoutRef.current) {
+        clearTimeout(enteredTimeoutRef.current);
+      }
 
       const participantInfo = getParticipantInfoForEntry(highestEntered.entryNumber);
       if (participantInfo) {
@@ -363,21 +381,16 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
         });
         setUpNextMode("entered");
 
-        // Clear any existing timeout
-        if (enteredDisplayTimeoutRef.current) {
-          clearTimeout(enteredDisplayTimeoutRef.current);
-        }
-
-        // After 3 seconds, clear the "showing entered" flag
-        // This state change triggers a re-run of this effect with fresh party data
-        enteredDisplayTimeoutRef.current = setTimeout(() => {
-          setShowingEntered(false);
+        // After 3 seconds, set mode to pending which triggers re-evaluation
+        enteredTimeoutRef.current = setTimeout(() => {
+          enteredTimeoutRef.current = null;
+          setUpNextMode("pending");
         }, 3000);
       }
-    } else if (!showingEntered && nextPending) {
-      // Not showing an "entered" state, show the next pending entry
+    } else if (!inEnteredWindow && nextPending) {
+      // Not in "entered" window, show the next pending entry
       const info = getParticipantInfoForEntry(nextPending.entryNumber);
-      if (info) {
+      if (info && displayedEntry?.entryNumber !== nextPending.entryNumber) {
         setDisplayedEntry({
           entryNumber: nextPending.entryNumber,
           participantName: info.name,
@@ -386,13 +399,7 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
         setUpNextMode("pending");
       }
     }
-
-    return () => {
-      if (enteredDisplayTimeoutRef.current) {
-        clearTimeout(enteredDisplayTimeoutRef.current);
-      }
-    };
-  }, [party, getParticipantInfoForEntry, showingEntered]);
+  }, [party, getParticipantInfoForEntry, upNextMode, displayedEntry?.entryNumber]);
 
   // Auto-trigger winner celebration when winner is detected
   useEffect(() => {
