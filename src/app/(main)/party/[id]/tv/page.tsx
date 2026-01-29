@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use, useCallback, useRef } from "react";
+import { useEffect, useState, use, useCallback, useRef, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { QRCodeSVG } from "qrcode.react";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -10,6 +10,19 @@ import {
   showEliminationAnnouncement,
   showWinnerAnnouncement,
 } from "@/components/tv/AnnouncementToast";
+
+const PLAYER_COLORS = [
+  { bg: "bg-blue-500/20", border: "border-blue-500", text: "text-blue-400", ring: "ring-blue-500" },
+  { bg: "bg-purple-500/20", border: "border-purple-500", text: "text-purple-400", ring: "ring-purple-500" },
+  { bg: "bg-pink-500/20", border: "border-pink-500", text: "text-pink-400", ring: "ring-pink-500" },
+  { bg: "bg-orange-500/20", border: "border-orange-500", text: "text-orange-400", ring: "ring-orange-500" },
+  { bg: "bg-cyan-500/20", border: "border-cyan-500", text: "text-cyan-400", ring: "ring-cyan-500" },
+  { bg: "bg-yellow-500/20", border: "border-yellow-500", text: "text-yellow-400", ring: "ring-yellow-500" },
+  { bg: "bg-emerald-500/20", border: "border-emerald-500", text: "text-emerald-400", ring: "ring-emerald-500" },
+  { bg: "bg-rose-500/20", border: "border-rose-500", text: "text-rose-400", ring: "ring-rose-500" },
+  { bg: "bg-indigo-500/20", border: "border-indigo-500", text: "text-indigo-400", ring: "ring-indigo-500" },
+  { bg: "bg-lime-500/20", border: "border-lime-500", text: "text-lime-400", ring: "ring-lime-500" },
+];
 
 interface Entry {
   id: string;
@@ -92,6 +105,26 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
   // Announcement queue state
   const [announcementQueue, setAnnouncementQueue] = useState<Array<{type: 'entry' | 'elimination' | 'winner', data: any}>>([]);
   const processingQueueRef = useRef(false);
+
+  // Map participant IDs to color indices (stable across re-renders)
+  const participantColorMap = useMemo(() => {
+    const map = new Map<string, number>();
+    party?.participants.forEach((p, idx) => {
+      map.set(p.id, idx % PLAYER_COLORS.length);
+    });
+    return map;
+  }, [party?.participants]);
+
+  // Get participant ID for a given entry number
+  const getParticipantIdForEntry = useCallback((entryNumber: number): string | null => {
+    if (!party) return null;
+    for (const p of party.participants) {
+      if (p.assignments.some((a) => a.entryNumber === entryNumber)) {
+        return p.id;
+      }
+    }
+    return null;
+  }, [party]);
 
   const fetchParty = useCallback(async () => {
     try {
@@ -481,6 +514,11 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     .sort((a, b) => {
       if (a.hasWinner) return -1;
       if (b.hasWinner) return 1;
+      // Eliminated players (no active, no waiting) go to bottom
+      const aEliminated = a.activeCount === 0 && a.waitingCount === 0 && !a.hasWinner && a.eliminatedCount > 0;
+      const bEliminated = b.activeCount === 0 && b.waitingCount === 0 && !b.hasWinner && b.eliminatedCount > 0;
+      if (aEliminated && !bEliminated) return 1;
+      if (!aEliminated && bEliminated) return -1;
       return b.activeCount - a.activeCount;
     });
 
@@ -734,12 +772,12 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
               <Badge className="bg-purple-600">{party.participants.length} players</Badge>
             </h2>
             <div className="space-y-3 overflow-y-auto max-h-[calc(100%-3rem)]">
-              {standings
-                .filter((p) => !ejectedPlayers.has(p.id))
-                .map((p, idx) => {
+              {standings.map((p, idx) => {
                   const isEjecting = ejectingPlayers.has(p.id);
+                  const isEliminated = p.activeCount === 0 && p.waitingCount === 0 && !p.hasWinner && p.eliminatedCount > 0;
                   const hasActivityPulse = lastActivityParticipant?.id === p.id;
                   const activityType = lastActivityParticipant?.type;
+                  const playerColor = PLAYER_COLORS[participantColorMap.get(p.id) ?? 0];
 
                   let pulseClass = "";
                   if (hasActivityPulse && activityType === "entry") {
@@ -748,22 +786,26 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
                     pulseClass = "animate-[pulseGlowPlayerRed_2s_ease-in-out_infinite]";
                   }
 
+                  // Determine card styling based on state
+                  let cardClasses = "";
+                  if (p.hasWinner) {
+                    cardClasses = "bg-yellow-500/30 border-2 border-yellow-500";
+                  } else if (isEliminated) {
+                    cardClasses = `bg-gray-800/30 border border-gray-600 opacity-50 ${isEjecting ? "animate-[playerEject_1.5s_ease-in_forwards]" : ""}`;
+                  } else if (p.activeCount > 0) {
+                    cardClasses = `${playerColor.bg} border ${playerColor.border}`;
+                  } else {
+                    cardClasses = `${playerColor.bg} border ${playerColor.border} opacity-80`;
+                  }
+
                   return (
                     <div
                       key={p.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg ${
-                        isEjecting
-                          ? "animate-[playerEject_1.5s_ease-in_forwards]"
-                          : ""
-                      } ${pulseClass} ${
-                        p.hasWinner
-                          ? "bg-yellow-500/30 border-2 border-yellow-500"
-                          : p.activeCount > 0
-                          ? "bg-green-500/20 border border-green-500/50"
-                          : "bg-gray-800/50 border border-gray-700 opacity-60"
-                      }`}
+                      className={`flex items-center gap-3 p-3 rounded-lg ${cardClasses} ${pulseClass}`}
                     >
-                      <span className="text-2xl font-bold text-white w-8">{idx + 1}</span>
+                      <span className="text-2xl font-bold text-white w-8">
+                        {isEliminated ? "💀" : idx + 1}
+                      </span>
                       <UserAvatar
                         name={p.user.name}
                         email={p.user.email}
@@ -771,16 +813,29 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
                         size="sm"
                       />
                       <div className="flex-1">
-                        <p className="text-white font-bold text-lg">{p.displayName}</p>
+                        <p className={`font-bold text-lg ${isEliminated ? "text-gray-400" : "text-white"}`}>{p.displayName}</p>
                         <div className="flex gap-1 flex-wrap">
+                          {/* Active wrestlers */}
                           {p.assignments
                             .map((a) => {
                               const entry = entries.find(e => e.entryNumber === a.entryNumber);
                               return { num: a.entryNumber, entry };
                             })
-                            .filter(({ entry }) => entry?.wrestlerName && !entry?.eliminatedAt)
+                            .filter(({ entry }) => entry?.wrestlerName && !entry?.eliminatedAt && !entry?.isWinner)
                             .map(({ num, entry }) => (
-                              <Badge key={num} className="bg-green-600 text-xs">
+                              <Badge key={num} className={`${playerColor.bg} ${playerColor.border} ${playerColor.text} text-xs`}>
+                                #{num} {entry!.wrestlerName}
+                              </Badge>
+                            ))}
+                          {/* Eliminated wrestlers */}
+                          {p.assignments
+                            .map((a) => {
+                              const entry = entries.find(e => e.entryNumber === a.entryNumber);
+                              return { num: a.entryNumber, entry };
+                            })
+                            .filter(({ entry }) => entry?.eliminatedAt)
+                            .map(({ num, entry }) => (
+                              <Badge key={num} className="bg-gray-700/50 border-gray-600 text-gray-500 text-xs line-through">
                                 #{num} {entry!.wrestlerName}
                               </Badge>
                             ))}
@@ -793,7 +848,7 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
                         {p.hasWinner ? (
                           <Badge className="bg-yellow-500 text-black font-bold">WINNER</Badge>
                         ) : (
-                          <span className="text-3xl font-black text-white">{p.activeCount}</span>
+                          <span className={`text-3xl font-black ${isEliminated ? "text-gray-500" : "text-white"}`}>{p.activeCount}</span>
                         )}
                       </div>
                     </div>
@@ -814,6 +869,8 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
                 {activeWrestlers.map((entry) => {
                   const isAnimatingOut = animatingOut.has(entry.id);
                   const isLatestEntry = latestEntryId === entry.id;
+                  const participantId = getParticipantIdForEntry(entry.entryNumber);
+                  const playerColor = participantId ? PLAYER_COLORS[participantColorMap.get(participantId) ?? 0] : PLAYER_COLORS[0];
 
                   let animationClass = "";
                   if (isAnimatingOut) {
@@ -831,15 +888,15 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
                         isAnimatingOut
                           ? "bg-red-500/40 border border-red-500"
                           : isLatestEntry
-                          ? "bg-green-500/30 border-2 border-green-400"
-                          : "bg-green-500/20 border border-green-500"
+                          ? `${playerColor.bg} border-2 ${playerColor.border}`
+                          : `${playerColor.bg} border ${playerColor.border}`
                       }`}
                     >
                       <div className="flex items-center gap-1">
-                        <span className={`${textSizes.number} font-bold ${isAnimatingOut ? "text-red-400" : "text-green-400"}`}>#{entry.entryNumber}</span>
+                        <span className={`${textSizes.number} font-bold ${isAnimatingOut ? "text-red-400" : playerColor.text}`}>#{entry.entryNumber}</span>
                         <span className={`text-white font-medium truncate ${textSizes.name}`}>{entry.wrestlerName}</span>
                       </div>
-                      <p className={`${isAnimatingOut ? "text-red-300" : "text-green-300"} ${textSizes.participant}`}>{getParticipantForEntry(entry.entryNumber)}</p>
+                      <p className={`${isAnimatingOut ? "text-red-300" : playerColor.text} ${textSizes.participant}`}>{getParticipantForEntry(entry.entryNumber)}</p>
                     </div>
                   );
                 })}

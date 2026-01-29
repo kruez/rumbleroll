@@ -256,9 +256,11 @@ export default function TestDashboardPage({
 
       if (hasWinner) break;
 
+      const allEntered = enteredCount >= 30;
       const canEnter = enteredCount < 30;
-      const canEliminate =
-        activeCount >= overlappingSimConfig.minWrestlersBeforeEliminations;
+      const canEliminate = allEntered
+        ? activeCount > 1  // After all entered, eliminate until 1 remains
+        : activeCount >= overlappingSimConfig.minWrestlersBeforeEliminations;
 
       // Decide action: enter or eliminate
       let action: "enter" | "eliminate" | null = null;

@@ -22,9 +22,9 @@ export function showEntryAnnouncement({
       <div className="w-full animate-[slideInFromTop_0.5s_ease-out]">
         <div className="bg-gradient-to-r from-green-600 via-green-500 to-green-600 text-white px-6 py-4 rounded-lg shadow-2xl border-2 border-green-400">
           <div className="flex items-center justify-center gap-4">
-            <span className="text-3xl font-black tracking-tight">#{entryNumber}</span>
-            <div className="h-8 w-0.5 bg-green-300" />
-            <span className="text-2xl font-bold uppercase tracking-wider">
+            <span className="text-3xl font-black tracking-tight shrink-0">#{entryNumber}</span>
+            <div className="h-8 w-0.5 bg-green-300 shrink-0" />
+            <span className="text-2xl font-bold uppercase tracking-wider truncate">
               {wrestlerName}
             </span>
           </div>
@@ -52,9 +52,9 @@ export function showEliminationAnnouncement({
       <div className="w-full animate-[shake_0.5s_ease-in-out]">
         <div className="bg-gradient-to-r from-red-700 via-red-600 to-red-700 text-white px-6 py-4 rounded-lg shadow-2xl border-2 border-red-400">
           <div className="flex items-center justify-center gap-4">
-            <span className="text-3xl font-black text-red-200">#{entryNumber}</span>
-            <div className="h-8 w-0.5 bg-red-400" />
-            <span className="text-2xl font-bold uppercase tracking-wider line-through decoration-2">
+            <span className="text-3xl font-black text-red-200 shrink-0">#{entryNumber}</span>
+            <div className="h-8 w-0.5 bg-red-400 shrink-0" />
+            <span className="text-2xl font-bold uppercase tracking-wider line-through decoration-2 truncate">
               {wrestlerName}
             </span>
           </div>
