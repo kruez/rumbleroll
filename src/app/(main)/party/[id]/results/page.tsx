@@ -22,7 +22,7 @@ interface Assignment {
 
 interface Participant {
   id: string;
-  user: { id: string; name: string | null; email: string };
+  user: { id: string; name: string | null; email: string; venmoHandle?: string | null; cashAppHandle?: string | null };
   assignments: Assignment[];
 }
 
@@ -38,6 +38,7 @@ interface Party {
   id: string;
   name: string;
   status: "LOBBY" | "NUMBERS_ASSIGNED" | "COMPLETED";
+  entryFee: number | null;
   event: RumbleEvent;
   participants: Participant[];
   isHost: boolean;
@@ -92,6 +93,18 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
     }
     return "Unknown";
   };
+
+  const getWinnerParticipant = () => {
+    if (!winner) return null;
+    for (const p of party.participants) {
+      if (p.assignments.some((a) => a.entryNumber === winner.entryNumber)) {
+        return p;
+      }
+    }
+    return null;
+  };
+
+  const winnerParticipant = getWinnerParticipant();
 
   // Calculate final standings
   const standings = party.participants
@@ -163,9 +176,33 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
                 <CardContent className="py-12 text-center">
                   <p className="text-yellow-400 text-lg mb-2">ROYAL RUMBLE WINNER</p>
                   <p className="text-5xl font-black text-white mb-4">{winner.wrestlerName}</p>
-                  <p className="text-xl text-yellow-300">
+                  <p className="text-xl text-yellow-300 mb-4">
                     Entry #{winner.entryNumber} - {getParticipantForEntry(winner.entryNumber)}
                   </p>
+                  {party.entryFee && winnerParticipant && (
+                    <div className="mt-6 pt-6 border-t border-yellow-500/30">
+                      <p className="text-yellow-400 text-sm mb-3">Pay the winner:</p>
+                      <div className="flex justify-center gap-4 flex-wrap">
+                        {winnerParticipant.user.venmoHandle && (
+                          <div className="px-4 py-2 bg-gray-900/50 rounded-lg">
+                            <span className="text-blue-400 font-medium">Venmo: </span>
+                            <span className="text-white">{winnerParticipant.user.venmoHandle}</span>
+                          </div>
+                        )}
+                        {winnerParticipant.user.cashAppHandle && (
+                          <div className="px-4 py-2 bg-gray-900/50 rounded-lg">
+                            <span className="text-green-400 font-medium">Cash App: </span>
+                            <span className="text-white">{winnerParticipant.user.cashAppHandle}</span>
+                          </div>
+                        )}
+                        {!winnerParticipant.user.venmoHandle && !winnerParticipant.user.cashAppHandle && (
+                          <p className="text-gray-400 text-sm">
+                            Contact {winnerParticipant.user.name || winnerParticipant.user.email} directly
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}

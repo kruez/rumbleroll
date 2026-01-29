@@ -18,7 +18,7 @@ export async function GET(
     const party = await prisma.party.findUnique({
       where: { id },
       include: {
-        host: { select: { id: true, name: true, email: true } },
+        host: { select: { id: true, name: true, email: true, venmoHandle: true, cashAppHandle: true } },
         event: {
           include: {
             entries: { orderBy: { entryNumber: "asc" } },
@@ -26,7 +26,7 @@ export async function GET(
         },
         participants: {
           include: {
-            user: { select: { id: true, name: true, email: true } },
+            user: { select: { id: true, name: true, email: true, venmoHandle: true, cashAppHandle: true } },
           },
         },
         assignments: true,
@@ -61,6 +61,7 @@ export async function GET(
       name: party.name,
       inviteCode: party.inviteCode,
       status: party.status,
+      entryFee: party.entryFee,
       hostId: party.hostId,
       host: party.host,
       event: party.event,

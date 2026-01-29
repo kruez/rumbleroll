@@ -23,6 +23,8 @@ export default function CreatePartyPage() {
   const [name, setName] = useState("");
   const [eventId, setEventId] = useState("");
   const [hostParticipates, setHostParticipates] = useState(true);
+  const [hasEntryFee, setHasEntryFee] = useState(false);
+  const [entryFee, setEntryFee] = useState("");
   const [events, setEvents] = useState<RumbleEvent[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -70,7 +72,12 @@ export default function CreatePartyPage() {
       const res = await fetch("/api/parties", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, eventId, hostParticipates }),
+        body: JSON.stringify({
+          name,
+          eventId,
+          hostParticipates,
+          entryFee: hasEntryFee && entryFee ? parseFloat(entryFee) : null,
+        }),
       });
 
       const data = await res.json();
@@ -162,6 +169,42 @@ export default function CreatePartyPage() {
                   ? "You'll receive entry numbers along with other players"
                   : "You'll host the party but won't receive any entry numbers"}
               </p>
+
+              <div className="border-t border-gray-700 pt-4">
+                <div className="flex items-center space-x-3 py-2">
+                  <Checkbox
+                    id="hasEntryFee"
+                    checked={hasEntryFee}
+                    onCheckedChange={(checked) => setHasEntryFee(checked === true)}
+                    className="border-gray-600 data-[state=checked]:bg-purple-600"
+                  />
+                  <Label htmlFor="hasEntryFee" className="text-white cursor-pointer">
+                    This party has an entry fee
+                  </Label>
+                </div>
+
+                {hasEntryFee && (
+                  <div className="space-y-2 mt-3">
+                    <Label htmlFor="entryFee" className="text-white">Entry Fee Amount</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                      <Input
+                        id="entryFee"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="10.00"
+                        value={entryFee}
+                        onChange={(e) => setEntryFee(e.target.value)}
+                        className="bg-gray-900 border-gray-600 text-white pl-7"
+                      />
+                    </div>
+                    <p className="text-gray-500 text-sm">
+                      Fees are informational only - collect payments separately via Venmo or CashApp
+                    </p>
+                  </div>
+                )}
+              </div>
 
               <Button
                 type="submit"

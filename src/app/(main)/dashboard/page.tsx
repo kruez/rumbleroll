@@ -23,6 +23,7 @@ interface Party {
   name: string;
   inviteCode: string;
   status: "LOBBY" | "NUMBERS_ASSIGNED" | "COMPLETED";
+  entryFee: number | null;
   hostId: string;
   host: { id: string; name: string | null; email: string };
   event: RumbleEvent;
@@ -166,9 +167,14 @@ export default function DashboardPage() {
                         <CardTitle className="text-white">{party.name}</CardTitle>
                         <CardDescription className="text-gray-400">{party.event.name}</CardDescription>
                       </div>
-                      <Badge className={getStatusColor(party.status)}>
-                        {getStatusLabel(party.status)}
-                      </Badge>
+                      <div className="flex gap-2">
+                        {party.entryFee && (
+                          <Badge className="bg-green-600">${party.entryFee}</Badge>
+                        )}
+                        <Badge className={getStatusColor(party.status)}>
+                          {getStatusLabel(party.status)}
+                        </Badge>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>

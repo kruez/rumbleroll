@@ -45,8 +45,9 @@ interface Party {
   name: string;
   inviteCode: string;
   status: "LOBBY" | "NUMBERS_ASSIGNED" | "COMPLETED";
+  entryFee: number | null;
   hostId: string;
-  host: { id: string; name: string | null; email: string };
+  host: { id: string; name: string | null; email: string; venmoHandle: string | null; cashAppHandle: string | null };
   event: RumbleEvent;
   participants: Participant[];
   isHost: boolean;
@@ -334,6 +335,42 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
 
           {/* Party Info Sidebar */}
           <div className="space-y-6">
+            {/* Entry Fee Info */}
+            {party.entryFee && (
+              <Card className="bg-gradient-to-br from-green-900/50 to-gray-800/50 border-green-700">
+                <CardHeader>
+                  <CardTitle className="text-white text-lg">Entry Fee</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-center mb-4">
+                    <span className="text-3xl font-bold text-green-400">${party.entryFee.toFixed(2)}</span>
+                  </div>
+                  {(party.host.venmoHandle || party.host.cashAppHandle) && (
+                    <div className="space-y-2">
+                      <p className="text-gray-400 text-sm text-center mb-2">Pay the host:</p>
+                      {party.host.venmoHandle && (
+                        <div className="flex items-center justify-center gap-2 p-2 bg-gray-900/50 rounded">
+                          <span className="text-blue-400 font-medium">Venmo:</span>
+                          <span className="text-white">{party.host.venmoHandle}</span>
+                        </div>
+                      )}
+                      {party.host.cashAppHandle && (
+                        <div className="flex items-center justify-center gap-2 p-2 bg-gray-900/50 rounded">
+                          <span className="text-green-400 font-medium">Cash App:</span>
+                          <span className="text-white">{party.host.cashAppHandle}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {!party.host.venmoHandle && !party.host.cashAppHandle && (
+                    <p className="text-gray-400 text-sm text-center">
+                      Contact {party.host.name || party.host.email} to pay
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Invite Code */}
             <Card className="bg-gray-800/50 border-gray-700">
               <CardHeader>

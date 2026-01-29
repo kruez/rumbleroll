@@ -8,13 +8,17 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String?
-  password      String
-  isAdmin       Boolean   @default(false)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String?
+  password        String
+  isAdmin         Boolean   @default(false)
+  venmoHandle     String?
+  cashAppHandle   String?
+  profileImageUrl String?
+  bio             String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   hostedParties    Party[]            @relation("HostedParties")
   participations   PartyParticipant[]
@@ -43,6 +47,7 @@ model Party {
   name        String
   inviteCode  String      @unique
   status      PartyStatus @default(LOBBY)
+  entryFee    Float?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 

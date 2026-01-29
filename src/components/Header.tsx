@@ -3,6 +3,16 @@
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Settings, LogOut } from "lucide-react";
 
 interface HeaderProps {
   showBackLink?: { href: string; label: string };
@@ -61,12 +71,41 @@ export function Header({ showBackLink }: HeaderProps = {}) {
                     </Button>
                   </Link>
                 )}
-                <span className="text-gray-300 hidden sm:inline">
-                  {session?.user?.name || session?.user?.email}
-                </span>
-                <Button variant="ghost" onClick={() => signOut()} className="text-gray-300">
-                  Sign Out
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+                      <Avatar size="sm">
+                        <AvatarImage src={session?.user?.image || undefined} alt={session?.user?.name || "User"} />
+                        <AvatarFallback className="bg-purple-600 text-white text-xs">
+                          {session?.user?.name
+                            ? session.user.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+                            : session?.user?.email?.[0].toUpperCase() || "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-gray-300 hidden sm:inline">
+                        {session?.user?.name || session?.user?.email}
+                      </span>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link href="/settings" className="cursor-pointer">
+                        <Settings className="mr-2 h-4 w-4" />
+                        Settings
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => signOut()}
+                      className="cursor-pointer text-red-400 focus:text-red-400"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Sign Out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </>
             ) : (
               <>
