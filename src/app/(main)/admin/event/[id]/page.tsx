@@ -32,6 +32,7 @@ interface RumbleEvent {
   id: string;
   name: string;
   year: number;
+  isTest: boolean;
   status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
   entries: RumbleEntry[];
   _count: { parties: number };
@@ -433,69 +434,71 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
           </Card>
         )}
 
-        {/* Test Mode Section */}
-        <Card className="bg-gray-800/50 border-gray-700 mb-8">
-          <CardHeader
-            className="cursor-pointer"
-            onClick={() => setTestModeOpen(!testModeOpen)}
-          >
-            <CardTitle className="text-white flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                Test Mode
-                <Badge variant="outline" className="text-orange-400 border-orange-400">
-                  Demo
-                </Badge>
-              </span>
-              <span className="text-gray-400 text-sm">
-                {testModeOpen ? "▼" : "▶"}
-              </span>
-            </CardTitle>
-          </CardHeader>
-          {testModeOpen && (
-            <CardContent className="space-y-4">
-              <p className="text-gray-400 text-sm">
-                Use these tools to quickly test the event flow with auto-generated data.
-              </p>
-              <div className="flex flex-wrap gap-3">
-                <Button
-                  onClick={() => handleTestAction("fill")}
-                  disabled={testModeLoading || simulatingEliminations || enteredCount === 30}
-                  className="bg-purple-600 hover:bg-purple-700"
-                >
-                  {testModeLoading ? "Working..." : "Auto-fill All Wrestlers"}
-                </Button>
-                <Button
-                  onClick={() => handleTestAction("eliminate")}
-                  disabled={testModeLoading || simulatingEliminations || activeCount === 0}
-                  variant="destructive"
-                >
-                  {testModeLoading ? "Working..." : "Eliminate Random Wrestler"}
-                </Button>
-                <Button
-                  onClick={simulateEliminations}
-                  disabled={testModeLoading || simulatingEliminations || activeCount < 2}
-                  className="bg-orange-600 hover:bg-orange-700"
-                >
-                  {simulatingEliminations ? "Simulating..." : "Simulate Until Winner"}
-                </Button>
-                <Button
-                  onClick={() => handleTestAction("reset")}
-                  disabled={testModeLoading || simulatingEliminations}
-                  variant="outline"
-                  className="bg-transparent border-gray-500 text-gray-300 hover:bg-gray-700"
-                >
-                  {testModeLoading ? "Working..." : "Reset Event"}
-                </Button>
-              </div>
-              {simulatingEliminations && (
-                <div className="flex items-center gap-2 text-orange-400">
-                  <div className="animate-spin h-4 w-4 border-2 border-orange-400 border-t-transparent rounded-full" />
-                  <span>Simulating eliminations... {activeCount} wrestlers remaining</span>
+        {/* Test Mode Section - Only show for test events */}
+        {event.isTest && (
+          <Card className="bg-gray-800/50 border-gray-700 mb-8">
+            <CardHeader
+              className="cursor-pointer"
+              onClick={() => setTestModeOpen(!testModeOpen)}
+            >
+              <CardTitle className="text-white flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  Test Mode
+                  <Badge variant="outline" className="text-orange-400 border-orange-400">
+                    Demo
+                  </Badge>
+                </span>
+                <span className="text-gray-400 text-sm">
+                  {testModeOpen ? "▼" : "▶"}
+                </span>
+              </CardTitle>
+            </CardHeader>
+            {testModeOpen && (
+              <CardContent className="space-y-4">
+                <p className="text-gray-400 text-sm">
+                  Use these tools to quickly test the event flow with auto-generated data.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    onClick={() => handleTestAction("fill")}
+                    disabled={testModeLoading || simulatingEliminations || enteredCount === 30}
+                    className="bg-purple-600 hover:bg-purple-700"
+                  >
+                    {testModeLoading ? "Working..." : "Auto-fill All Wrestlers"}
+                  </Button>
+                  <Button
+                    onClick={() => handleTestAction("eliminate")}
+                    disabled={testModeLoading || simulatingEliminations || activeCount === 0}
+                    variant="destructive"
+                  >
+                    {testModeLoading ? "Working..." : "Eliminate Random Wrestler"}
+                  </Button>
+                  <Button
+                    onClick={simulateEliminations}
+                    disabled={testModeLoading || simulatingEliminations || activeCount < 2}
+                    className="bg-orange-600 hover:bg-orange-700"
+                  >
+                    {simulatingEliminations ? "Simulating..." : "Simulate Until Winner"}
+                  </Button>
+                  <Button
+                    onClick={() => handleTestAction("reset")}
+                    disabled={testModeLoading || simulatingEliminations}
+                    variant="outline"
+                    className="bg-transparent border-gray-500 text-gray-300 hover:bg-gray-700"
+                  >
+                    {testModeLoading ? "Working..." : "Reset Event"}
+                  </Button>
                 </div>
-              )}
-            </CardContent>
-          )}
-        </Card>
+                {simulatingEliminations && (
+                  <div className="flex items-center gap-2 text-orange-400">
+                    <div className="animate-spin h-4 w-4 border-2 border-orange-400 border-t-transparent rounded-full" />
+                    <span>Simulating eliminations... {activeCount} wrestlers remaining</span>
+                  </div>
+                )}
+              </CardContent>
+            )}
+          </Card>
+        )}
 
         {/* All Entries */}
         <Card className="bg-gray-800/50 border-gray-700">

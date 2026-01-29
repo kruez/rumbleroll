@@ -41,6 +41,46 @@ export async function POST(
     }
 
     switch (action) {
+      case "enter": {
+        // Enter the next wrestler by entry number order
+        const nextEmptyEntry = event.entries
+          .sort((a, b) => a.entryNumber - b.entryNumber)
+          .find((e) => !e.wrestlerName);
+
+        if (!nextEmptyEntry) {
+          return NextResponse.json({
+            error: "All wrestlers have already entered",
+            complete: true,
+          }, { status: 400 });
+        }
+
+        // Pick a random wrestler name
+        const wrestlerName = WRESTLER_NAMES[Math.floor(Math.random() * WRESTLER_NAMES.length)];
+
+        // Set event to IN_PROGRESS if it was NOT_STARTED
+        if (event.status === "NOT_STARTED") {
+          await prisma.rumbleEvent.update({
+            where: { id: eventId },
+            data: { status: "IN_PROGRESS" },
+          });
+        }
+
+        const updatedEntry = await prisma.rumbleEntry.update({
+          where: { id: nextEmptyEntry.id },
+          data: {
+            wrestlerName,
+            enteredAt: new Date(),
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          entryNumber: updatedEntry.entryNumber,
+          wrestlerName: updatedEntry.wrestlerName,
+          message: `${wrestlerName} entered at #${updatedEntry.entryNumber}`,
+        });
+      }
+
       case "fill": {
         // Auto-fill all empty entries with random wrestler names
         const emptyEntries = event.entries.filter((e) => !e.wrestlerName);
@@ -149,7 +189,7 @@ export async function POST(
 
       default:
         return NextResponse.json({
-          error: "Invalid action. Use: fill, eliminate, or reset",
+          error: "Invalid action. Use: enter, fill, eliminate, or reset",
         }, { status: 400 });
     }
   } catch (error) {

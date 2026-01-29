@@ -3,14 +3,10 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateInviteCode } from "@/utils/inviteCode";
 
-// Test player names for simulation
-const TEST_PLAYER_NAMES = [
-  "Test Player 1",
-  "Test Player 2",
-  "Test Player 3",
-  "Test Player 4",
-  "Test Player 5",
-];
+// Generate test player names dynamically based on count
+function getTestPlayerNames(count: number): string[] {
+  return Array.from({ length: count }, (_, i) => `Test Player ${i + 1}`);
+}
 
 // GET /api/admin/events - List all events
 export async function GET() {
@@ -42,17 +38,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { name, year, isTest } = await request.json();
+    const { name, isTest, playerCount: rawPlayerCount } = await request.json();
 
-    if (!name || !year) {
-      return NextResponse.json({ error: "Name and year are required" }, { status: 400 });
+    if (!name) {
+      return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
+
+    // Default year to current year
+    const year = new Date().getFullYear();
+
+    // Validate player count for test events (1-30, default 3)
+    const playerCount = isTest ? Math.min(30, Math.max(1, rawPlayerCount || 3)) : 3;
 
     // Create event with 30 blank entries
     const event = await prisma.rumbleEvent.create({
       data: {
         name,
         year,
+        isTest: isTest || false,
         entries: {
           createMany: {
             data: Array.from({ length: 30 }, (_, i) => ({
@@ -90,8 +93,9 @@ export async function POST(request: Request) {
       });
 
       // Create test users if they don't exist, then add as participants
+      const testPlayerNames = getTestPlayerNames(playerCount);
       const testUsers = [];
-      for (const playerName of TEST_PLAYER_NAMES) {
+      for (const playerName of testPlayerNames) {
         const email = `${playerName.toLowerCase().replace(/\s+/g, "")}@test.local`;
         let user = await prisma.user.findUnique({ where: { email } });
         if (!user) {

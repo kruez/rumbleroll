@@ -17,6 +17,7 @@ interface RumbleEvent {
   id: string;
   name: string;
   year: number;
+  isTest: boolean;
   status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
   _count: { parties: number; entries: number };
 }
@@ -28,8 +29,8 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newEventName, setNewEventName] = useState("");
-  const [newEventYear, setNewEventYear] = useState(new Date().getFullYear());
   const [isTestSimulation, setIsTestSimulation] = useState(false);
+  const [testPlayerCount, setTestPlayerCount] = useState(3);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -64,8 +65,8 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: newEventName,
-          year: newEventYear,
           isTest: isTestSimulation,
+          playerCount: isTestSimulation ? testPlayerCount : undefined,
         }),
       });
 
@@ -74,6 +75,7 @@ export default function AdminPage() {
         setCreateDialogOpen(false);
         setNewEventName("");
         setIsTestSimulation(false);
+        setTestPlayerCount(3);
 
         if (isTestSimulation && data.testDashboardUrl) {
           router.push(data.testDashboardUrl);
@@ -148,15 +150,6 @@ export default function AdminPage() {
                     onChange={(e) => setNewEventName(e.target.value)}
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="eventYear">Year</Label>
-                  <Input
-                    id="eventYear"
-                    type="number"
-                    value={newEventYear}
-                    onChange={(e) => setNewEventYear(parseInt(e.target.value))}
-                  />
-                </div>
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="testSimulation"
@@ -171,10 +164,33 @@ export default function AdminPage() {
                   </Label>
                 </div>
                 {isTestSimulation && (
-                  <p className="text-xs text-gray-500">
-                    Creates a test party with 5 players and distributed numbers.
-                    You&apos;ll be redirected to a test dashboard.
-                  </p>
+                  <div className="space-y-3 pl-6 border-l-2 border-purple-500">
+                    <div className="space-y-2">
+                      <Label htmlFor="playerCount">Number of test players</Label>
+                      <Input
+                        id="playerCount"
+                        type="number"
+                        min={1}
+                        max={30}
+                        value={testPlayerCount}
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value);
+                          if (value >= 1 && value <= 30) {
+                            setTestPlayerCount(value);
+                          }
+                        }}
+                        className="w-24"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Creates a test party with {testPlayerCount} player{testPlayerCount !== 1 ? "s" : ""}.
+                      {testPlayerCount <= 30 && (
+                        <> Each gets {Math.floor(30 / testPlayerCount)} number{Math.floor(30 / testPlayerCount) !== 1 ? "s" : ""}
+                        {30 % testPlayerCount > 0 && ` (first ${30 % testPlayerCount} get ${Math.floor(30 / testPlayerCount) + 1})`}.</>
+                      )}
+                      {" "}You&apos;ll be redirected to a test dashboard.
+                    </p>
+                  </div>
                 )}
                 <Button
                   onClick={handleCreateEvent}
@@ -208,7 +224,14 @@ export default function AdminPage() {
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>
-                        <CardTitle className="text-white">{event.name}</CardTitle>
+                        <CardTitle className="text-white flex items-center gap-2">
+                          {event.name}
+                          {event.isTest && (
+                            <Badge variant="outline" className="text-orange-400 border-orange-400 text-xs">
+                              Test
+                            </Badge>
+                          )}
+                        </CardTitle>
                         <CardDescription className="text-gray-400">
                           {event.year}
                         </CardDescription>
