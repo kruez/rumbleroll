@@ -318,8 +318,8 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
   }, [party]);
 
   // Up Next badge management
-  // Track the last entry number we showed as "entered" to detect new entries
   const lastShownEntryNumberRef = useRef<number>(0);
+  const showingEnteredRef = useRef<boolean>(false);
   const enteredDisplayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -351,8 +351,9 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     if (highestEntered && highestEntered.entryNumber > lastShownEntryNumberRef.current) {
       // New entry detected - show "entered" state
       lastShownEntryNumberRef.current = highestEntered.entryNumber;
-      const participantInfo = getParticipantInfoForEntry(highestEntered.entryNumber);
+      showingEnteredRef.current = true;
 
+      const participantInfo = getParticipantInfoForEntry(highestEntered.entryNumber);
       if (participantInfo) {
         setDisplayedEntry({
           entryNumber: highestEntered.entryNumber,
@@ -367,35 +368,24 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
           clearTimeout(enteredDisplayTimeoutRef.current);
         }
 
-        // After 3 seconds, switch to showing next pending
+        // After 3 seconds, clear the "showing entered" flag - this triggers a re-render
+        // which will cause the effect to run again and show the next pending
         enteredDisplayTimeoutRef.current = setTimeout(() => {
-          if (nextPending) {
-            const nextInfo = getParticipantInfoForEntry(nextPending.entryNumber);
-            if (nextInfo) {
-              setDisplayedEntry({
-                entryNumber: nextPending.entryNumber,
-                participantName: nextInfo.name,
-                participantId: nextInfo.id,
-              });
-              setUpNextMode("pending");
-            }
-          } else {
-            setUpNextMode("hidden");
-          }
+          showingEnteredRef.current = false;
+          // Force update by setting mode, which will trigger re-evaluation
+          setUpNextMode("pending");
         }, 3000);
       }
-    } else if (upNextMode === "pending" || (upNextMode === "hidden" && nextPending)) {
-      // We're in pending mode or need to initialize - show next pending
-      if (nextPending) {
-        const info = getParticipantInfoForEntry(nextPending.entryNumber);
-        if (info && (displayedEntry?.entryNumber !== nextPending.entryNumber || upNextMode === "hidden")) {
-          setDisplayedEntry({
-            entryNumber: nextPending.entryNumber,
-            participantName: info.name,
-            participantId: info.id,
-          });
-          setUpNextMode("pending");
-        }
+    } else if (!showingEnteredRef.current && nextPending) {
+      // Not showing an "entered" state, show the next pending entry
+      const info = getParticipantInfoForEntry(nextPending.entryNumber);
+      if (info) {
+        setDisplayedEntry({
+          entryNumber: nextPending.entryNumber,
+          participantName: info.name,
+          participantId: info.id,
+        });
+        setUpNextMode("pending");
       }
     }
 
@@ -404,7 +394,7 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
         clearTimeout(enteredDisplayTimeoutRef.current);
       }
     };
-  }, [party, getParticipantInfoForEntry, upNextMode, displayedEntry?.entryNumber]);
+  }, [party, getParticipantInfoForEntry]);
 
   // Auto-trigger winner celebration when winner is detected
   useEffect(() => {
