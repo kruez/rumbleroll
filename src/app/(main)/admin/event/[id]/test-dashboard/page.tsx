@@ -38,6 +38,11 @@ interface Party {
   participants: { id: string }[];
 }
 
+interface PartyListItem {
+  id: string;
+  name: string;
+}
+
 interface ActivityLog {
   id: string;
   message: string;
@@ -66,6 +71,7 @@ export default function TestDashboardPage({
   const router = useRouter();
   const [event, setEvent] = useState<RumbleEvent | null>(null);
   const [party, setParty] = useState<Party | null>(null);
+  const [eventParties, setEventParties] = useState<PartyListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [simulationRunning, setSimulationRunning] = useState(false);
@@ -111,6 +117,13 @@ export default function TestDashboardPage({
           const partyData = await partyRes.json();
           setParty(partyData);
         }
+      }
+
+      // Fetch all parties for this event (for ScoreboardDropdown when no partyId)
+      const partiesRes = await fetch(`/api/parties?eventId=${id}`);
+      if (partiesRes.ok) {
+        const partiesData = await partiesRes.json();
+        setEventParties(partiesData);
       }
     } catch (error) {
       console.error("Failed to fetch data:", error);
@@ -377,18 +390,19 @@ export default function TestDashboardPage({
             </div>
             <div className="flex gap-2">
               {party && (
-                <>
-                  <Button
-                    variant="outline"
-                    className="bg-transparent border-purple-500 text-purple-400 hover:bg-purple-500/10"
-                    onClick={() =>
-                      window.open(`/party/${party.id}`, "_blank")
-                    }
-                  >
-                    Open Lobby
-                  </Button>
-                  <ScoreboardDropdown partyId={party.id} />
-                </>
+                <Button
+                  variant="outline"
+                  className="bg-transparent border-purple-500 text-purple-400 hover:bg-purple-500/10"
+                  onClick={() =>
+                    window.open(`/party/${party.id}`, "_blank")
+                  }
+                >
+                  Open Lobby
+                </Button>
+              )}
+              {/* Show ScoreboardDropdown if we have a party or any parties exist for event */}
+              {(party || eventParties.length > 0) && (
+                <ScoreboardDropdown partyId={party?.id || eventParties[0]?.id} />
               )}
             </div>
           </div>

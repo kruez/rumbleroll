@@ -599,22 +599,23 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
             } else if (state === "eliminated") {
               if (isShowingSkull) {
                 // During skull animation - keep full player color
-                cardClasses = `${playerColor.bg} border ${playerColor.border} opacity-75`;
+                cardClasses = `${playerColor.bg} border ${playerColor.border}`;
               } else if (isAnimatingOut) {
                 // Brief transition after skull
-                cardClasses = `${playerColor.bg} border ${playerColor.border} opacity-75`;
+                cardClasses = "bg-gray-800/80 border border-gray-600";
               } else {
-                // Final eliminated state - keep full player color with slight dim
-                cardClasses = `${playerColor.bg} border ${playerColor.border} opacity-75`;
+                // Final eliminated state - grayscale/dark to clearly distinguish from active
+                cardClasses = "bg-gray-800/80 border border-gray-600";
               }
             } else if (state === "active") {
+              // Full vibrant player color with prominent border
               cardClasses = `${playerColor.bg} border-2 ${playerColor.border}`;
               if (isLatestEntry) {
                 animationClass = "animate-[pulseGlowGreen_2s_ease-in-out_infinite]";
               }
             } else {
-              // Pending state - use muted player color with improved visibility
-              cardClasses = `${playerColorMuted.bg} border-2 ${playerColorMuted.border} opacity-70`;
+              // Pending state - muted player color, semi-transparent
+              cardClasses = `${playerColorMuted.bg} border-2 ${playerColorMuted.border} opacity-80`;
               // Add pulsating animation for the next upcoming entry
               if (num === nextUpEntryNumber) {
                 animationClass = "animate-[pulseGlowExcitement_1.5s_ease-in-out_infinite]";
@@ -635,69 +636,91 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                   </div>
                 )}
 
-                {/* Persistent faded skull for eliminated entries */}
+                {/* Persistent faded skull for eliminated entries - BIGGER */}
                 {state === "eliminated" && !isShowingSkull && (
-                  <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none opacity-30">
-                    <span className="text-4xl">💀</span>
+                  <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none opacity-20">
+                    <span className="text-6xl">💀</span>
                   </div>
                 )}
 
-                {/* Entry Number - always visible */}
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-2xl font-bold ${
-                    state === "winner" ? "text-yellow-300" :
-                    state === "eliminated" ? playerColor.text + " opacity-70" :
-                    state === "active" ? playerColor.text :
-                    playerColor.text + " opacity-80"
-                  }`}>
-                    {num}
-                  </span>
-
-                  {/* Status indicator / Timer */}
-                  {state === "winner" && (
-                    <span className="text-yellow-400 text-lg">👑</span>
-                  )}
-                  {state === "active" && entry && (
-                    <span className={`text-sm font-mono ${playerColor.text} bg-black/30 px-1.5 py-0.5 rounded`}>
-                      {formatDuration(entry.enteredAt, null)}
+                {/* ===== PENDING CARD ===== */}
+                {state === "pending" && (
+                  <div className="flex flex-col items-center justify-center h-full relative z-10">
+                    <span className="text-4xl font-black text-white/90">{num}</span>
+                    <p className="text-xl font-bold truncate w-full text-center mt-1 text-white/80">
+                      {participantInfo?.name || "Unassigned"}
+                    </p>
+                    <span className={`text-sm mt-2 font-medium ${num === nextUpEntryNumber ? "text-purple-300" : "text-gray-500"}`}>
+                      {num === nextUpEntryNumber ? "UP NEXT" : "WAITING"}
                     </span>
-                  )}
-                  {state === "eliminated" && entry && !isShowingSkull && (
-                    <span className="text-xs font-mono text-gray-400/60 bg-black/30 px-1 py-0.5 rounded">
-                      {formatDuration(entry.enteredAt, entry.eliminatedAt)}
-                    </span>
-                  )}
-                  {state === "pending" && (
-                    <span className="text-xs text-gray-500">WAITING</span>
-                  )}
-                </div>
-
-                {/* Player Name - larger text */}
-                <p className={`truncate ${
-                  state === "winner" ? "text-base text-yellow-200" :
-                  state === "eliminated" ? "text-base " + playerColor.text + " opacity-70" :
-                  state === "active" ? "text-base text-white/80" :
-                  "text-lg " + playerColor.text + " opacity-80"
-                }`}>
-                  {participantInfo?.name || "Unassigned"}
-                </p>
-
-                {/* Wrestler Name (when entered) - larger text */}
-                {entry?.wrestlerName && (
-                  <p className={`text-xl font-semibold truncate mt-auto ${
-                    state === "winner" ? "text-white" :
-                    state === "eliminated" ? "text-white/70" :
-                    "text-white"
-                  }`}>
-                    {entry.wrestlerName}
-                  </p>
+                  </div>
                 )}
 
-                {/* Eliminated By (when eliminated) */}
-                {state === "eliminated" && entry?.eliminatedBy && !isShowingSkull && (
-                  <p className="text-xs text-gray-400/60 truncate">
-                    by {entry.eliminatedBy}
-                  </p>
+                {/* ===== ACTIVE CARD ===== */}
+                {state === "active" && entry && (
+                  <div className="flex flex-col h-full relative z-10">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-lg font-bold text-white">{num}</span>
+                      <span className="text-xl font-mono font-bold bg-black/40 px-2 py-1 rounded text-white">
+                        {formatDuration(entry.enteredAt, null)}
+                      </span>
+                    </div>
+                    <p className="text-2xl font-black text-white truncate flex-1 flex items-center">
+                      {entry.wrestlerName}
+                    </p>
+                    <p className="text-sm opacity-80 truncate text-white/70">
+                      {participantInfo?.name}
+                    </p>
+                  </div>
+                )}
+
+                {/* ===== ELIMINATED CARD ===== */}
+                {state === "eliminated" && entry && !isShowingSkull && (
+                  <div className="flex flex-col h-full relative z-10">
+                    <span className="inline-block bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded mb-1 self-start">
+                      ELIMINATED
+                    </span>
+                    <p className="text-xl font-bold text-white/80 truncate">
+                      {entry.wrestlerName}
+                    </p>
+                    <div className="flex justify-between items-center mt-auto text-sm text-gray-400">
+                      <span className="truncate">{participantInfo?.name}</span>
+                      <span className="font-mono">
+                        {formatDuration(entry.enteredAt, entry.eliminatedAt)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* ===== WINNER CARD ===== */}
+                {state === "winner" && entry && (
+                  <div className="flex flex-col h-full relative z-10">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-lg font-bold text-yellow-300">{num}</span>
+                      <span className="text-yellow-400 text-2xl">👑</span>
+                    </div>
+                    <p className="text-2xl font-black text-white truncate flex-1 flex items-center">
+                      {entry.wrestlerName}
+                    </p>
+                    <p className="text-base text-yellow-200 truncate">
+                      {participantInfo?.name}
+                    </p>
+                  </div>
+                )}
+
+                {/* Skull animation overlay (during elimination) */}
+                {isShowingSkull && entry && (
+                  <div className="flex flex-col h-full relative z-10">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-lg font-bold text-white">{num}</span>
+                    </div>
+                    <p className="text-xl font-bold text-white/70 truncate">
+                      {entry.wrestlerName}
+                    </p>
+                    <p className="text-sm text-white/50 truncate mt-auto">
+                      {participantInfo?.name}
+                    </p>
+                  </div>
                 )}
               </div>
             );

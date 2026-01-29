@@ -3,12 +3,25 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateInviteCode } from "@/utils/inviteCode";
 
-// GET /api/parties - List user's parties
-export async function GET() {
+// GET /api/parties - List user's parties (or all parties for an event if eventId is provided)
+export async function GET(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const eventId = searchParams.get("eventId");
+
+    // If eventId is provided and user is admin, return all parties for that event
+    if (eventId && session.user.isAdmin) {
+      const parties = await prisma.party.findMany({
+        where: { eventId },
+        select: { id: true, name: true },
+        orderBy: { createdAt: "desc" },
+      });
+      return NextResponse.json(parties);
     }
 
     const parties = await prisma.party.findMany({
