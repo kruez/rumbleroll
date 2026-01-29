@@ -5,10 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { QRCodeSVG } from "qrcode.react";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Toaster } from "@/components/ui/sonner";
-import {
-  showEliminationAnnouncement,
-  showWinnerAnnouncement,
-} from "@/components/tv/AnnouncementToast";
+import { showEliminationAnnouncement } from "@/components/tv/AnnouncementToast";
 import { UpNextBadge } from "@/components/tv/UpNextBadge";
 
 const PLAYER_COLORS = [
@@ -170,22 +167,21 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     }
   }, [id]);
 
-  // Process announcement queue sequentially (elimination and winner toasts only)
+  // Process announcement queue sequentially (elimination toasts only)
   useEffect(() => {
     if (announcementQueue.length === 0 || processingQueueRef.current) return;
 
     processingQueueRef.current = true;
     const [current, ...rest] = announcementQueue;
 
-    // Entry announcements are now handled by UpNextBadge, skip toast
+    // Entry announcements are handled by UpNextBadge, winner by overlay
     if (current.type === 'elimination') {
       showEliminationAnnouncement(current.data);
-    } else if (current.type === 'winner') {
-      showWinnerAnnouncement(current.data.name, current.data.entryNumber);
     }
+    // Winner toast removed - celebration overlay handles it
 
-    // Process next after delay (entry: skip fast, elimination: 2s, winner: 3s)
-    const delay = current.type === 'entry' ? 100 : current.type === 'elimination' ? 2000 : 3000;
+    // Process next after delay (entry: skip fast, elimination: 2s, winner: skip)
+    const delay = current.type === 'entry' ? 100 : current.type === 'elimination' ? 2000 : 100;
     setTimeout(() => {
       setAnnouncementQueue(rest);
       processingQueueRef.current = false;
@@ -281,15 +277,10 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
           }
         }
 
-        // Winner announced
+        // Winner announced - just set the ref, overlay handles display
         if (entry.isWinner && (!prevEntry || !prevEntry.isWinner) && !hasAnnouncedWinnerRef.current) {
           hasAnnouncedWinnerRef.current = true;
-          if (entry.wrestlerName) {
-            newAnnouncements.push({
-              type: 'winner',
-              data: { name: entry.wrestlerName, entryNumber: entry.entryNumber }
-            });
-          }
+          // No toast - winner overlay displays automatically
         }
       }
 
@@ -410,27 +401,27 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     };
   }, [party, getParticipantInfoForEntry]);
 
-  // Auto-trigger winner when only 1 wrestler remains after all 30 entered
+  // Auto-trigger winner celebration when winner is detected
   useEffect(() => {
     if (!party || hasAnnouncedWinnerRef.current) return;
 
     const entries = party.event.entries;
-    const enteredCount = entries.filter(e => e.wrestlerName).length;
-    const activeWrestlers = entries.filter(e => e.wrestlerName && !e.eliminatedAt && !e.isWinner);
     const existingWinner = entries.find(e => e.isWinner);
 
-    // Don't auto-trigger if backend already set a winner
-    if (existingWinner) return;
-
-    // Only trigger when ALL 30 have entered AND exactly 1 remains
-    if (enteredCount === 30 && activeWrestlers.length === 1) {
-      const winner = activeWrestlers[0];
+    // Trigger when backend has marked a winner
+    if (existingWinner) {
       hasAnnouncedWinnerRef.current = true;
+      // No toast - the winner overlay handles the celebration
+      return;
+    }
 
-      setAnnouncementQueue(prev => [...prev, {
-        type: 'winner',
-        data: { name: winner.wrestlerName, entryNumber: winner.entryNumber }
-      }]);
+    // Also auto-detect if all 30 entered and 1 remains (frontend detection)
+    const enteredCount = entries.filter(e => e.wrestlerName).length;
+    const activeWrestlers = entries.filter(e => e.wrestlerName && !e.eliminatedAt && !e.isWinner);
+
+    if (enteredCount === 30 && activeWrestlers.length === 1) {
+      hasAnnouncedWinnerRef.current = true;
+      // The winner overlay will show once backend marks the winner
     }
   }, [party]);
 
@@ -960,12 +951,14 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
                             </Badge>
                           )}
 
-                          {/* Eliminated wrestlers (compact, just numbers) */}
+                          {/* Eliminated wrestlers with names */}
                           {p.assignments
                             .map((a) => ({ num: a.entryNumber, entry: entries.find(e => e.entryNumber === a.entryNumber) }))
                             .filter(({ entry }) => entry?.eliminatedAt)
-                            .map(({ num }) => (
-                              <span key={num} className="text-gray-500 text-xs line-through px-0.5">#{num}</span>
+                            .map(({ num, entry }) => (
+                              <span key={num} className="text-gray-500 text-xs line-through px-0.5">
+                                #{num} {entry?.wrestlerName}
+                              </span>
                             ))}
                         </div>
                       </div>

@@ -75,6 +75,7 @@ export default function TestDashboardPage({
     eliminationDelay: 1500,
     tickInterval: 800,
   });
+  const [customSpeed, setCustomSpeed] = useState(false);
   const stopSimulationRef = useRef(false);
 
   const addActivityLog = useCallback(
@@ -558,35 +559,98 @@ export default function TestDashboardPage({
           </CardHeader>
           <CardContent>
             {/* Speed Presets */}
-            <div className="flex items-center gap-2 mb-4 pb-4 border-b border-gray-700">
-              <span className="text-gray-400 text-sm">Speed:</span>
-              <Button
-                size="sm"
-                variant={simSpeed.entryDelay === 200 ? "default" : "outline"}
-                className={simSpeed.entryDelay === 200 ? "bg-green-600 hover:bg-green-700" : "bg-transparent border-gray-600 text-gray-400 hover:text-white"}
-                onClick={() => setSimSpeed({ entryDelay: 200, eliminationDelay: 500, tickInterval: 300 })}
-                disabled={simulationRunning}
-              >
-                Fast
-              </Button>
-              <Button
-                size="sm"
-                variant={simSpeed.entryDelay === 500 ? "default" : "outline"}
-                className={simSpeed.entryDelay === 500 ? "bg-blue-600 hover:bg-blue-700" : "bg-transparent border-gray-600 text-gray-400 hover:text-white"}
-                onClick={() => setSimSpeed({ entryDelay: 500, eliminationDelay: 1500, tickInterval: 800 })}
-                disabled={simulationRunning}
-              >
-                Normal
-              </Button>
-              <Button
-                size="sm"
-                variant={simSpeed.entryDelay === 2000 ? "default" : "outline"}
-                className={simSpeed.entryDelay === 2000 ? "bg-amber-600 hover:bg-amber-700" : "bg-transparent border-gray-600 text-gray-400 hover:text-white"}
-                onClick={() => setSimSpeed({ entryDelay: 2000, eliminationDelay: 4000, tickInterval: 2000 })}
-                disabled={simulationRunning}
-              >
-                Slow
-              </Button>
+            <div className="flex flex-col gap-4 mb-4 pb-4 border-b border-gray-700">
+              <div className="flex items-center gap-2">
+                <span className="text-gray-400 text-sm">Speed:</span>
+                <Button
+                  size="sm"
+                  variant={!customSpeed && simSpeed.entryDelay === 200 ? "default" : "outline"}
+                  className={!customSpeed && simSpeed.entryDelay === 200 ? "bg-green-600 hover:bg-green-700" : "bg-transparent border-gray-600 text-gray-400 hover:text-white"}
+                  onClick={() => {
+                    setCustomSpeed(false);
+                    setSimSpeed({ entryDelay: 200, eliminationDelay: 500, tickInterval: 300 });
+                  }}
+                  disabled={simulationRunning}
+                >
+                  Fast
+                </Button>
+                <Button
+                  size="sm"
+                  variant={!customSpeed && simSpeed.entryDelay === 500 ? "default" : "outline"}
+                  className={!customSpeed && simSpeed.entryDelay === 500 ? "bg-blue-600 hover:bg-blue-700" : "bg-transparent border-gray-600 text-gray-400 hover:text-white"}
+                  onClick={() => {
+                    setCustomSpeed(false);
+                    setSimSpeed({ entryDelay: 500, eliminationDelay: 1500, tickInterval: 800 });
+                  }}
+                  disabled={simulationRunning}
+                >
+                  Normal
+                </Button>
+                <Button
+                  size="sm"
+                  variant={!customSpeed && simSpeed.entryDelay === 2000 ? "default" : "outline"}
+                  className={!customSpeed && simSpeed.entryDelay === 2000 ? "bg-amber-600 hover:bg-amber-700" : "bg-transparent border-gray-600 text-gray-400 hover:text-white"}
+                  onClick={() => {
+                    setCustomSpeed(false);
+                    setSimSpeed({ entryDelay: 2000, eliminationDelay: 4000, tickInterval: 2000 });
+                  }}
+                  disabled={simulationRunning}
+                >
+                  Slow
+                </Button>
+                <Button
+                  size="sm"
+                  variant={customSpeed ? "default" : "outline"}
+                  className={customSpeed ? "bg-purple-600 hover:bg-purple-700" : "bg-transparent border-gray-600 text-gray-400 hover:text-white"}
+                  onClick={() => setCustomSpeed(true)}
+                  disabled={simulationRunning}
+                >
+                  Custom
+                </Button>
+              </div>
+              {customSpeed && (
+                <div className="flex items-center gap-4 p-3 bg-gray-700/50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <label className="text-gray-400 text-sm">Entry delay:</label>
+                    <input
+                      type="number"
+                      value={simSpeed.entryDelay / 1000}
+                      onChange={(e) => setSimSpeed(prev => ({ ...prev, entryDelay: parseFloat(e.target.value) * 1000 }))}
+                      className="w-20 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm"
+                      min="0.1"
+                      step="0.5"
+                      disabled={simulationRunning}
+                    />
+                    <span className="text-gray-500 text-sm">sec</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-gray-400 text-sm">Elimination delay:</label>
+                    <input
+                      type="number"
+                      value={simSpeed.eliminationDelay / 1000}
+                      onChange={(e) => setSimSpeed(prev => ({ ...prev, eliminationDelay: parseFloat(e.target.value) * 1000 }))}
+                      className="w-20 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm"
+                      min="0.1"
+                      step="0.5"
+                      disabled={simulationRunning}
+                    />
+                    <span className="text-gray-500 text-sm">sec</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-gray-400 text-sm">Tick interval:</label>
+                    <input
+                      type="number"
+                      value={simSpeed.tickInterval / 1000}
+                      onChange={(e) => setSimSpeed(prev => ({ ...prev, tickInterval: parseFloat(e.target.value) * 1000 }))}
+                      className="w-20 px-2 py-1 bg-gray-800 border border-gray-600 rounded text-white text-sm"
+                      min="0.1"
+                      step="0.5"
+                      disabled={simulationRunning}
+                    />
+                    <span className="text-gray-500 text-sm">sec</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {simulationMode === "auto" ? (
