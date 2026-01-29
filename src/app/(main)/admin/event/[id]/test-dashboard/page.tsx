@@ -34,7 +34,7 @@ interface Party {
   name: string;
   inviteCode: string;
   status: "LOBBY" | "NUMBERS_ASSIGNED" | "COMPLETED";
-  _count: { participants: number };
+  participants: { id: string }[];
 }
 
 interface ActivityLog {
@@ -273,7 +273,7 @@ export default function TestDashboardPage({
   const winner = event.entries.find((e) => e.isWinner);
 
   // Calculate numbers distribution info
-  const playerCount = party?._count.participants || 0;
+  const playerCount = party?.participants?.length || 0;
   const numbersPerPlayer = playerCount > 0 ? Math.floor(30 / playerCount) : 0;
   const playersWithExtra = playerCount > 0 ? 30 % playerCount : 0;
 
