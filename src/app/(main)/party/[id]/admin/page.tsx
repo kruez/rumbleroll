@@ -7,6 +7,14 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Header } from "@/components/Header";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -60,6 +68,8 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
   const [removingParticipant, setRemovingParticipant] = useState<string | null>(null);
   const [testModeExpanded, setTestModeExpanded] = useState(false);
   const [testModeLoading, setTestModeLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchParty = useCallback(async () => {
     try {
@@ -125,6 +135,25 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
       toast.error("Test mode action failed");
     } finally {
       setTestModeLoading(false);
+    }
+  };
+
+  const handleDeleteParty = async () => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/parties/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || "Failed to delete party");
+        return;
+      }
+      toast.success("Party deleted");
+      router.push("/dashboard");
+    } catch {
+      toast.error("Failed to delete party");
+    } finally {
+      setDeleting(false);
+      setDeleteDialogOpen(false);
     }
   };
 
@@ -512,6 +541,54 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
             </div>
           </div>
         )}
+
+        {/* Danger Zone */}
+        <Card className="bg-red-500/10 border-red-500/50 mt-8">
+          <CardHeader>
+            <CardTitle className="text-red-400 text-lg">Danger Zone</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Button
+              variant="destructive"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              Delete Party
+            </Button>
+            <p className="text-gray-500 text-xs mt-2">
+              Permanently delete this party and all participant data.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <DialogContent className="bg-gray-800 border-gray-700">
+            <DialogHeader>
+              <DialogTitle className="text-white">Delete Party</DialogTitle>
+              <DialogDescription className="text-gray-400">
+                Are you sure you want to delete &quot;{party.name}&quot;? This action cannot be undone.
+                All participant data and assignments will be permanently removed.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setDeleteDialogOpen(false)}
+                disabled={deleting}
+                className="border-gray-600 text-gray-300 hover:bg-gray-700"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteParty}
+                disabled={deleting}
+              >
+                {deleting ? "Deleting..." : "Delete Party"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );

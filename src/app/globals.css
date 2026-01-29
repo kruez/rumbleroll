@@ -190,3 +190,114 @@
     box-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
   }
 }
+
+/* Winner Screen Visual Replay Animations */
+@keyframes zoomInFromFar {
+  from {
+    opacity: 0;
+    transform: scale(0.1) translateY(50px);
+  }
+  to {
+    opacity: 0.3;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes wrestlerHitOff {
+  0% {
+    transform: translateX(0) scale(1);
+    opacity: 0.3;
+  }
+  20% {
+    transform: translateX(30px) scale(1.1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateX(300px) rotate(30deg) scale(0.3);
+    opacity: 0;
+  }
+}
+
+@keyframes eliminatorStrike {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 0.7;
+  }
+}
+
+/* Enhanced Elimination Card Animations */
+@keyframes spinEject {
+  0% {
+    transform: translateX(0) translateY(0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  30% {
+    transform: translateX(30px) translateY(-40px) rotate(180deg) scale(1.1);
+  }
+  100% {
+    transform: translateX(350px) translateY(-80px) rotate(720deg) scale(0.3);
+    opacity: 0;
+  }
+}
+
+@keyframes slideDownIntoColumn {
+  from {
+    transform: translateY(-50px) scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Entry and Activity Pulse Animations */
+@keyframes pulseGlowGreen {
+  0%,
+  100% {
+    box-shadow: 0 0 5px rgba(34, 197, 94, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.8);
+  }
+}
+
+@keyframes pulseGlowPlayerGreen {
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(34, 197, 94, 0.6);
+  }
+}
+
+@keyframes pulseGlowPlayerRed {
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(239, 68, 68, 0.6);
+  }
+}
+
+/* Player Ejection Animation */
+@keyframes playerEject {
+  0% {
+    transform: translateX(0) translateY(0) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  30% {
+    transform: translateX(-30px) translateY(-20px) rotate(-15deg) scale(1.05);
+  }
+  100% {
+    transform: translateX(-400px) translateY(150px) rotate(-720deg) scale(0.2);
+    opacity: 0;
+  }
+}

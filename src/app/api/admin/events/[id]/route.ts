@@ -82,10 +82,21 @@ export async function DELETE(
     });
 
     if (partiesCount > 0) {
-      return NextResponse.json(
-        { error: "Cannot delete event with active parties" },
-        { status: 400 }
-      );
+      // Get the event to check if it's a test event
+      const event = await prisma.rumbleEvent.findUnique({
+        where: { id },
+        select: { isTest: true },
+      });
+
+      if (event?.isTest) {
+        // For test events, cascade delete all associated parties
+        await prisma.party.deleteMany({ where: { eventId: id } });
+      } else {
+        return NextResponse.json(
+          { error: "Cannot delete event with active parties" },
+          { status: 400 }
+        );
+      }
     }
 
     await prisma.rumbleEvent.delete({ where: { id } });

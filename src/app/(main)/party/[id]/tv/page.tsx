@@ -55,10 +55,7 @@ interface ReplayEvent {
   timestamp: number;
 }
 
-interface ReplayState {
-  inRing: Set<string>;
-  eliminated: string[];
-}
+type CelebrationNameStatus = "entering" | "active" | "eliminating" | "eliminated";
 
 export default function TVDisplayPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -66,16 +63,27 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
   const [loading, setLoading] = useState(true);
   const [animatingOut, setAnimatingOut] = useState<Set<string>>(new Set());
 
-  // Replay mode state
-  const [replayMode, setReplayMode] = useState(false);
-  const [replayIndex, setReplayIndex] = useState(0);
-  const [replayTimeline, setReplayTimeline] = useState<ReplayEvent[]>([]);
-  const [replayState, setReplayState] = useState<ReplayState>({
-    inRing: new Set(),
-    eliminated: [],
-  });
-  const replayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Winner celebration replay state
+  const [showCelebrationReplay, setShowCelebrationReplay] = useState(false);
+  const [celebrationReplayIndex, setCelebrationReplayIndex] = useState(0);
+  const [celebrationNames, setCelebrationNames] = useState<Map<string, CelebrationNameStatus>>(new Map());
+  const [celebrationTimeline, setCelebrationTimeline] = useState<ReplayEvent[]>([]);
+  const celebrationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const winnerTimestampRef = useRef<number | null>(null);
+
+  // Enhanced elimination card animation state
+  const [cardTransitionPhase, setCardTransitionPhase] = useState<Map<string, "ejecting" | "sliding" | "pulsing">>(new Map());
+  const [latestEliminationId, setLatestEliminationId] = useState<string | null>(null);
+
+  // Most recent entry pulse state
+  const [latestEntryId, setLatestEntryId] = useState<string | null>(null);
+
+  // Player activity pulse state
+  const [lastActivityParticipant, setLastActivityParticipant] = useState<{ id: string; type: "entry" | "elimination" } | null>(null);
+
+  // Player ejection state
+  const [ejectingPlayers, setEjectingPlayers] = useState<Set<string>>(new Set());
+  const [ejectedPlayers, setEjectedPlayers] = useState<Set<string>>(new Set());
 
   // Track previous entries for detecting changes
   const prevEntriesRef = useRef<Entry[]>([]);
@@ -102,6 +110,16 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     const entries = party.event.entries;
     const prevEntries = prevEntriesRef.current;
 
+    // Local helper to find participant ID for an entry number
+    const findParticipantIdForEntry = (entryNumber: number): string | null => {
+      for (const p of party.participants) {
+        if (p.assignments.some((a) => a.entryNumber === entryNumber)) {
+          return p.id;
+        }
+      }
+      return null;
+    };
+
     // Skip initial load (when prevEntries is empty)
     if (prevEntries.length > 0) {
       // Detect new entries
@@ -114,22 +132,51 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
             wrestlerName: entry.wrestlerName,
             entryNumber: entry.entryNumber,
           });
+
+          // Set latest entry for green pulse
+          setLatestEntryId(entry.id);
+
+          // Set player activity pulse for entry
+          const participantId = findParticipantIdForEntry(entry.entryNumber);
+          if (participantId) {
+            setLastActivityParticipant({ id: participantId, type: "entry" });
+          }
         }
 
         // New elimination
         if (entry.eliminatedAt && (!prevEntry || !prevEntry.eliminatedAt)) {
           if (entry.wrestlerName && entry.eliminatedBy) {
-            // Add to animating out set
-            setAnimatingOut((prev) => new Set(prev).add(entry.id));
+            // Clear any entry pulse when elimination occurs
+            setLatestEntryId(null);
 
-            // Remove from animating set after animation completes (600ms)
+            // Update latest elimination for pulsing in eliminations column
+            setLatestEliminationId(entry.id);
+
+            // Add to animating out set with new spin eject animation
+            setAnimatingOut((prev) => new Set(prev).add(entry.id));
+            setCardTransitionPhase((prev) => new Map(prev).set(entry.id, "ejecting"));
+
+            // Phase 1: Spin eject (1200ms)
             setTimeout(() => {
               setAnimatingOut((prev) => {
                 const next = new Set(prev);
                 next.delete(entry.id);
                 return next;
               });
-            }, 600);
+              // Phase 2: Slide down into column (500ms)
+              setCardTransitionPhase((prev) => new Map(prev).set(entry.id, "sliding"));
+
+              setTimeout(() => {
+                // Phase 3: Pulsing until next elimination
+                setCardTransitionPhase((prev) => new Map(prev).set(entry.id, "pulsing"));
+              }, 500);
+            }, 1200);
+
+            // Set player activity pulse for elimination
+            const participantId = findParticipantIdForEntry(entry.entryNumber);
+            if (participantId) {
+              setLastActivityParticipant({ id: participantId, type: "elimination" });
+            }
 
             showEliminationAnnouncement({
               wrestlerName: entry.wrestlerName,
@@ -193,7 +240,7 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     return events.sort((a, b) => a.timestamp - b.timestamp);
   }, []);
 
-  // Start replay mode 15 seconds after winner is announced
+  // Start celebration replay 5 seconds after winner is shown (inside winner overlay)
   useEffect(() => {
     if (!party) return;
 
@@ -203,91 +250,149 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
       winnerTimestampRef.current = Date.now();
     }
 
-    if (winner && winnerTimestampRef.current && !replayMode) {
+    if (winner && winnerTimestampRef.current && !showCelebrationReplay) {
       const elapsed = Date.now() - winnerTimestampRef.current;
-      const timeUntilReplay = 15000 - elapsed;
+      const timeUntilReplay = 5000 - elapsed;
 
       if (timeUntilReplay <= 0) {
-        // Start replay immediately
+        // Start celebration replay immediately
         const timeline = buildReplayTimeline(party.event.entries);
-        setReplayTimeline(timeline);
-        setReplayIndex(0);
-        setReplayState({ inRing: new Set(), eliminated: [] });
-        setReplayMode(true);
+        setCelebrationTimeline(timeline);
+        setCelebrationReplayIndex(0);
+        setCelebrationNames(new Map());
+        setShowCelebrationReplay(true);
       } else {
-        // Schedule replay start
+        // Schedule celebration replay start
         const timeout = setTimeout(() => {
           const timeline = buildReplayTimeline(party.event.entries);
-          setReplayTimeline(timeline);
-          setReplayIndex(0);
-          setReplayState({ inRing: new Set(), eliminated: [] });
-          setReplayMode(true);
+          setCelebrationTimeline(timeline);
+          setCelebrationReplayIndex(0);
+          setCelebrationNames(new Map());
+          setShowCelebrationReplay(true);
         }, timeUntilReplay);
 
         return () => clearTimeout(timeout);
       }
     }
-  }, [party, replayMode, buildReplayTimeline]);
+  }, [party, showCelebrationReplay, buildReplayTimeline]);
 
-  // Process replay events
+  // Process celebration replay events
   useEffect(() => {
-    if (!replayMode || replayTimeline.length === 0) return;
+    if (!showCelebrationReplay || celebrationTimeline.length === 0) return;
 
     const processNextEvent = () => {
-      if (replayIndex >= replayTimeline.length) {
-        // Replay complete, restart after 5 seconds
-        replayTimeoutRef.current = setTimeout(() => {
-          setReplayIndex(0);
-          setReplayState({ inRing: new Set(), eliminated: [] });
-        }, 5000);
+      if (celebrationReplayIndex >= celebrationTimeline.length) {
+        // Replay complete, restart after 3 seconds
+        celebrationTimeoutRef.current = setTimeout(() => {
+          setCelebrationReplayIndex(0);
+          setCelebrationNames(new Map());
+        }, 3000);
         return;
       }
 
-      const event = replayTimeline[replayIndex];
-      const delay = event.type === "entry" ? 1000 : event.type === "elimination" ? 2000 : 3000;
+      const event = celebrationTimeline[celebrationReplayIndex];
+      const delay = event.type === "entry" ? 800 : event.type === "elimination" ? 1500 : 2000;
 
-      // Show announcement
       if (event.type === "entry" && event.entry.wrestlerName) {
-        showEntryAnnouncement({
-          wrestlerName: event.entry.wrestlerName,
-          entryNumber: event.entry.entryNumber,
+        // Name zooms in with zoomInFromFar, stays faint
+        setCelebrationNames((prev) => {
+          const next = new Map(prev);
+          next.set(event.entry.id, "entering");
+          return next;
         });
-        setReplayState((prev) => ({
-          ...prev,
-          inRing: new Set(prev.inRing).add(event.entry.id),
-        }));
+        // After animation, set to active
+        setTimeout(() => {
+          setCelebrationNames((prev) => {
+            const next = new Map(prev);
+            if (next.get(event.entry.id) === "entering") {
+              next.set(event.entry.id, "active");
+            }
+            return next;
+          });
+        }, 500);
       } else if (event.type === "elimination" && event.entry.wrestlerName && event.entry.eliminatedBy) {
-        showEliminationAnnouncement({
-          wrestlerName: event.entry.wrestlerName,
-          eliminatedBy: event.entry.eliminatedBy,
-          entryNumber: event.entry.entryNumber,
+        // Find the eliminator entry
+        const eliminatorEntry = celebrationTimeline.find(
+          (e) => e.entry.wrestlerName === event.entry.eliminatedBy && e.type === "entry"
+        );
+
+        // Mark eliminated wrestler as eliminating
+        setCelebrationNames((prev) => {
+          const next = new Map(prev);
+          next.set(event.entry.id, "eliminating");
+          // Pulse the eliminator
+          if (eliminatorEntry) {
+            const eliminatorId = eliminatorEntry.entry.id;
+            const currentStatus = next.get(eliminatorId);
+            if (currentStatus === "active") {
+              // Temporarily mark for strike animation
+              next.set(eliminatorId, "eliminating");
+              setTimeout(() => {
+                setCelebrationNames((p) => {
+                  const n = new Map(p);
+                  if (n.get(eliminatorId) === "eliminating") {
+                    n.set(eliminatorId, "active");
+                  }
+                  return n;
+                });
+              }, 600);
+            }
+          }
+          return next;
         });
-        setReplayState((prev) => {
-          const newInRing = new Set(prev.inRing);
-          newInRing.delete(event.entry.id);
-          return {
-            inRing: newInRing,
-            eliminated: [...prev.eliminated, event.entry.id],
-          };
-        });
-      } else if (event.type === "winner" && event.entry.wrestlerName) {
-        showWinnerAnnouncement(event.entry.wrestlerName, event.entry.entryNumber);
+
+        // After hit animation, mark as eliminated
+        setTimeout(() => {
+          setCelebrationNames((prev) => {
+            const next = new Map(prev);
+            next.set(event.entry.id, "eliminated");
+            return next;
+          });
+        }, 800);
       }
 
       // Schedule next event
-      replayTimeoutRef.current = setTimeout(() => {
-        setReplayIndex((prev) => prev + 1);
+      celebrationTimeoutRef.current = setTimeout(() => {
+        setCelebrationReplayIndex((prev) => prev + 1);
       }, delay);
     };
 
     processNextEvent();
 
     return () => {
-      if (replayTimeoutRef.current) {
-        clearTimeout(replayTimeoutRef.current);
+      if (celebrationTimeoutRef.current) {
+        clearTimeout(celebrationTimeoutRef.current);
       }
     };
-  }, [replayMode, replayIndex, replayTimeline]);
+  }, [showCelebrationReplay, celebrationReplayIndex, celebrationTimeline]);
+
+  // Detect eliminated players and trigger ejection animation
+  useEffect(() => {
+    if (!party) return;
+
+    const entries = party.event.entries;
+
+    for (const p of party.participants) {
+      const participantEntries = p.assignments.map((a) =>
+        entries.find((e) => e.entryNumber === a.entryNumber)
+      );
+      const allEntered = participantEntries.every((e) => e?.wrestlerName);
+      const allEliminated = participantEntries.every((e) => e?.eliminatedAt);
+      const hasWinner = participantEntries.some((e) => e?.isWinner);
+
+      if (allEntered && allEliminated && !hasWinner && !ejectedPlayers.has(p.id) && !ejectingPlayers.has(p.id)) {
+        setEjectingPlayers((prev) => new Set(prev).add(p.id));
+        setTimeout(() => {
+          setEjectingPlayers((prev) => {
+            const n = new Set(prev);
+            n.delete(p.id);
+            return n;
+          });
+          setEjectedPlayers((prev) => new Set(prev).add(p.id));
+        }, 1500);
+      }
+    }
+  }, [party, ejectedPlayers, ejectingPlayers]);
 
   if (loading) {
     return (
@@ -334,28 +439,16 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
       return b.activeCount - a.activeCount;
     });
 
-  // In replay mode, use replay state; otherwise use live data
-  const activeWrestlers = replayMode
-    ? entries
-        .filter((e) => replayState.inRing.has(e.id))
-        .sort((a, b) => a.entryNumber - b.entryNumber)
-    : entries
-        .filter((e) => e.wrestlerName && !e.isWinner && (!e.eliminatedAt || animatingOut.has(e.id)))
-        .sort((a, b) => a.entryNumber - b.entryNumber);
+  // Active wrestlers (exclude those animating out via spin eject)
+  const activeWrestlers = entries
+    .filter((e) => e.wrestlerName && !e.isWinner && (!e.eliminatedAt || animatingOut.has(e.id)))
+    .sort((a, b) => a.entryNumber - b.entryNumber);
 
-  const recentEliminations = replayMode
-    ? entries
-        .filter((e) => replayState.eliminated.includes(e.id))
-        .sort((a, b) => {
-          const aIdx = replayState.eliminated.indexOf(a.id);
-          const bIdx = replayState.eliminated.indexOf(b.id);
-          return bIdx - aIdx; // Most recent first
-        })
-        .slice(0, 5)
-    : entries
-        .filter((e) => e.eliminatedAt)
-        .sort((a, b) => new Date(b.eliminatedAt!).getTime() - new Date(a.eliminatedAt!).getTime())
-        .slice(0, 5);
+  // Recent eliminations (exclude those still in ejecting phase, only show sliding/pulsing)
+  const recentEliminations = entries
+    .filter((e) => e.eliminatedAt && !animatingOut.has(e.id))
+    .sort((a, b) => new Date(b.eliminatedAt!).getTime() - new Date(a.eliminatedAt!).getTime())
+    .slice(0, 5);
 
   const winner = entries.find((e) => e.isWinner);
 
@@ -424,14 +517,14 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
         <p className="text-xl text-purple-300">{party.name}</p>
       </div>
 
-      {/* Winner Celebration */}
-      {winner && !replayMode && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 overflow-hidden">
+      {/* Winner Celebration with Visual Replay */}
+      {winner && (
+        <div className="fixed inset-0 bg-black/90 flex flex-col items-center justify-start z-50 overflow-hidden pt-8">
           {/* Spotlight effect */}
           <div className="absolute inset-0 bg-gradient-radial from-yellow-500/30 via-transparent to-transparent animate-pulse" />
 
           {/* Animated sparkles */}
-          <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
             {[...Array(20)].map((_, i) => (
               <div
                 key={i}
@@ -448,8 +541,8 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
 
           <div className="text-center relative z-10 animate-[fadeIn_1s_ease-out]">
             {/* Championship Belt SVG */}
-            <div className="mb-8 flex justify-center">
-              <svg viewBox="0 0 200 120" className="w-64 h-40 drop-shadow-[0_0_30px_rgba(234,179,8,0.8)]">
+            <div className="mb-4 flex justify-center">
+              <svg viewBox="0 0 200 120" className="w-48 h-32 drop-shadow-[0_0_30px_rgba(234,179,8,0.8)]">
                 {/* Main belt plate */}
                 <ellipse cx="100" cy="60" rx="85" ry="45" fill="url(#beltGold)" stroke="#B8860B" strokeWidth="3"/>
                 {/* Inner decoration */}
@@ -480,43 +573,73 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
               </svg>
             </div>
 
-            <p className="text-yellow-400 text-3xl font-bold mb-4 tracking-widest animate-pulse">
+            <p className="text-yellow-400 text-2xl font-bold mb-2 tracking-widest animate-pulse">
               ROYAL RUMBLE WINNER
             </p>
-            <p className="text-8xl font-black text-white mb-6 drop-shadow-[0_0_20px_rgba(255,255,255,0.5)] animate-[scaleIn_0.5s_ease-out]">
+            <p className="text-6xl font-black text-white mb-4 drop-shadow-[0_0_20px_rgba(255,255,255,0.5)] animate-[scaleIn_0.5s_ease-out]">
               {winner.wrestlerName}
             </p>
             <div className="flex items-center justify-center gap-4">
-              <span className="text-4xl font-bold text-yellow-300">#{winner.entryNumber}</span>
-              <span className="text-3xl text-white">-</span>
-              <span className="text-3xl text-yellow-400 font-bold">{getParticipantForEntry(winner.entryNumber)}</span>
+              <span className="text-3xl font-bold text-yellow-300">#{winner.entryNumber}</span>
+              <span className="text-2xl text-white">-</span>
+              <span className="text-2xl text-yellow-400 font-bold">{getParticipantForEntry(winner.entryNumber)}</span>
             </div>
-
-            {/* Replay countdown */}
-            <p className="text-gray-400 text-sm mt-8">Replay starting soon...</p>
           </div>
+
+          {/* Visual Replay Area */}
+          {showCelebrationReplay && (
+            <div className="relative z-10 mt-8 w-full max-w-4xl px-8 flex-1 overflow-hidden">
+              <div className="text-center mb-4">
+                <Badge className="bg-blue-600/80 text-white text-sm px-3 py-1">
+                  MATCH REPLAY
+                </Badge>
+              </div>
+              <div className="relative h-64 bg-black/50 rounded-xl border border-gray-700 overflow-hidden flex flex-wrap items-center justify-center gap-3 p-4">
+                {celebrationTimeline
+                  .filter((e) => e.type === "entry")
+                  .map((e) => {
+                    const status = celebrationNames.get(e.entry.id);
+                    if (!status) return null;
+
+                    let animationClass = "";
+                    if (status === "entering") {
+                      animationClass = "animate-[zoomInFromFar_0.5s_ease-out_forwards]";
+                    } else if (status === "active") {
+                      animationClass = "opacity-30";
+                    } else if (status === "eliminating") {
+                      animationClass = "animate-[wrestlerHitOff_0.8s_ease-in_forwards]";
+                    } else if (status === "eliminated") {
+                      return null; // Don't render eliminated names
+                    }
+
+                    // Check if this wrestler is doing the eliminating (pulse effect)
+                    const isEliminator = celebrationTimeline.some(
+                      (evt) =>
+                        evt.type === "elimination" &&
+                        evt.entry.eliminatedBy === e.entry.wrestlerName &&
+                        celebrationNames.get(evt.entry.id) === "eliminating"
+                    );
+
+                    return (
+                      <div
+                        key={e.entry.id}
+                        className={`px-3 py-1 text-white font-bold text-lg ${animationClass} ${
+                          isEliminator ? "animate-[eliminatorStrike_0.6s_ease-in-out]" : ""
+                        }`}
+                      >
+                        <span className="text-yellow-400 text-sm mr-1">#{e.entry.entryNumber}</span>
+                        {e.entry.wrestlerName}
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
+          {!showCelebrationReplay && (
+            <p className="text-gray-400 text-sm mt-8 relative z-10">Replay starting soon...</p>
+          )}
         </div>
-      )}
-
-      {/* Replay Mode Indicator */}
-      {replayMode && (
-        <>
-          {/* Replay badge in header */}
-          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50">
-            <Badge className="bg-blue-600 text-white text-lg px-4 py-2 animate-pulse">
-              REPLAY
-            </Badge>
-          </div>
-          {/* Progress bar at bottom */}
-          <div className="fixed bottom-0 left-0 right-0 h-2 bg-gray-800 z-50">
-            <div
-              className="h-full bg-blue-500 transition-all duration-300"
-              style={{
-                width: `${replayTimeline.length > 0 ? (replayIndex / replayTimeline.length) * 100 : 0}%`,
-              }}
-            />
-          </div>
-        </>
       )}
 
       {party.status === "LOBBY" ? (
@@ -566,55 +689,72 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
               <Badge className="bg-purple-600">{party.participants.length} players</Badge>
             </h2>
             <div className="space-y-3 overflow-y-auto max-h-[calc(100%-3rem)]">
-              {standings.map((p, idx) => {
-                const activeNumbers = p.assignments
-                  .filter((a) => {
-                    const entry = entries.find(e => e.entryNumber === a.entryNumber);
-                    return entry?.wrestlerName && !entry?.eliminatedAt;
-                  })
-                  .map((a) => a.entryNumber);
+              {standings
+                .filter((p) => !ejectedPlayers.has(p.id))
+                .map((p, idx) => {
+                  const activeNumbers = p.assignments
+                    .filter((a) => {
+                      const entry = entries.find(e => e.entryNumber === a.entryNumber);
+                      return entry?.wrestlerName && !entry?.eliminatedAt;
+                    })
+                    .map((a) => a.entryNumber);
 
-                return (
-                  <div
-                    key={p.id}
-                    className={`flex items-center gap-3 p-3 rounded-lg ${
-                      p.hasWinner
-                        ? "bg-yellow-500/30 border-2 border-yellow-500"
-                        : p.activeCount > 0
-                        ? "bg-green-500/20 border border-green-500/50"
-                        : "bg-gray-800/50 border border-gray-700 opacity-60"
-                    }`}
-                  >
-                    <span className="text-2xl font-bold text-white w-8">{idx + 1}</span>
-                    <UserAvatar
-                      name={p.user.name}
-                      email={p.user.email}
-                      profileImageUrl={p.user.profileImageUrl}
-                      size="sm"
-                    />
-                    <div className="flex-1">
-                      <p className="text-white font-bold text-lg">{p.displayName}</p>
-                      <div className="flex gap-1 flex-wrap">
-                        {activeNumbers.map((num) => (
-                          <Badge key={num} className="bg-green-600 text-xs">
-                            #{num}
-                          </Badge>
-                        ))}
+                  const isEjecting = ejectingPlayers.has(p.id);
+                  const hasActivityPulse = lastActivityParticipant?.id === p.id;
+                  const activityType = lastActivityParticipant?.type;
+
+                  let pulseClass = "";
+                  if (hasActivityPulse && activityType === "entry") {
+                    pulseClass = "animate-[pulseGlowPlayerGreen_2s_ease-in-out_infinite]";
+                  } else if (hasActivityPulse && activityType === "elimination") {
+                    pulseClass = "animate-[pulseGlowPlayerRed_2s_ease-in-out_infinite]";
+                  }
+
+                  return (
+                    <div
+                      key={p.id}
+                      className={`flex items-center gap-3 p-3 rounded-lg ${
+                        isEjecting
+                          ? "animate-[playerEject_1.5s_ease-in_forwards]"
+                          : ""
+                      } ${pulseClass} ${
+                        p.hasWinner
+                          ? "bg-yellow-500/30 border-2 border-yellow-500"
+                          : p.activeCount > 0
+                          ? "bg-green-500/20 border border-green-500/50"
+                          : "bg-gray-800/50 border border-gray-700 opacity-60"
+                      }`}
+                    >
+                      <span className="text-2xl font-bold text-white w-8">{idx + 1}</span>
+                      <UserAvatar
+                        name={p.user.name}
+                        email={p.user.email}
+                        profileImageUrl={p.user.profileImageUrl}
+                        size="sm"
+                      />
+                      <div className="flex-1">
+                        <p className="text-white font-bold text-lg">{p.displayName}</p>
+                        <div className="flex gap-1 flex-wrap">
+                          {activeNumbers.map((num) => (
+                            <Badge key={num} className="bg-green-600 text-xs">
+                              #{num}
+                            </Badge>
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {p.waitingCount} waiting | {p.activeCount} active | {p.eliminatedCount} eliminated
+                        </p>
                       </div>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {p.waitingCount} waiting | {p.activeCount} active | {p.eliminatedCount} eliminated
-                      </p>
+                      <div className="text-right">
+                        {p.hasWinner ? (
+                          <Badge className="bg-yellow-500 text-black font-bold">WINNER</Badge>
+                        ) : (
+                          <span className="text-3xl font-black text-white">{p.activeCount}</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-right">
-                      {p.hasWinner ? (
-                        <Badge className="bg-yellow-500 text-black font-bold">WINNER</Badge>
-                      ) : (
-                        <span className="text-3xl font-black text-white">{p.activeCount}</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           </div>
 
@@ -629,13 +769,26 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
               <div className={`grid ${gridConfig.cols} gap-2 flex-1 content-start`}>
                 {activeWrestlers.map((entry) => {
                   const isAnimatingOut = animatingOut.has(entry.id);
+                  const isLatestEntry = latestEntryId === entry.id;
+
+                  let animationClass = "";
+                  if (isAnimatingOut) {
+                    animationClass = "animate-[spinEject_1.2s_ease-in_forwards]";
+                  } else if (isLatestEntry) {
+                    animationClass = "animate-[pulseGlowGreen_2s_ease-in-out_infinite]";
+                  } else {
+                    animationClass = "animate-[fadeIn_0.3s_ease-out]";
+                  }
+
                   return (
                     <div
                       key={entry.id}
-                      className={`rounded-lg ${getCardSizeClasses(gridConfig.size)} ${
+                      className={`rounded-lg ${getCardSizeClasses(gridConfig.size)} ${animationClass} ${
                         isAnimatingOut
-                          ? "bg-red-500/40 border border-red-500 animate-[fallToRight_0.6s_ease-in_forwards]"
-                          : "bg-green-500/20 border border-green-500 animate-[fadeIn_0.3s_ease-out]"
+                          ? "bg-red-500/40 border border-red-500"
+                          : isLatestEntry
+                          ? "bg-green-500/30 border-2 border-green-400"
+                          : "bg-green-500/20 border border-green-500"
                       }`}
                     >
                       <div className="flex items-center gap-1">
@@ -658,19 +811,7 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
                   let bgColor = "bg-gray-700";
                   let textColor = "text-gray-400";
 
-                  if (replayMode && entry) {
-                    // Replay mode coloring
-                    const isInRing = replayState.inRing.has(entry.id);
-                    const isEliminated = replayState.eliminated.includes(entry.id);
-                    if (isInRing) {
-                      bgColor = "bg-green-500";
-                      textColor = "text-white";
-                    } else if (isEliminated) {
-                      bgColor = "bg-red-600/50";
-                      textColor = "text-red-300";
-                    }
-                  } else if (entry) {
-                    // Live mode coloring
+                  if (entry) {
                     if (entry.isWinner) {
                       bgColor = "bg-yellow-500";
                       textColor = "text-black";
@@ -701,7 +842,7 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
               ELIMINATIONS
               <Badge className="bg-red-500">
-                {replayMode ? replayState.eliminated.length : entries.filter((e) => e.eliminatedAt).length}
+                {entries.filter((e) => e.eliminatedAt).length}
               </Badge>
               <span className="text-xs text-gray-500 font-normal ml-auto">(newest first)</span>
             </h2>
@@ -709,30 +850,42 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
               {recentEliminations.length === 0 ? (
                 <p className="text-gray-500">No eliminations yet</p>
               ) : (
-                recentEliminations.map((entry, index) => (
-                  <div
-                    key={entry.id}
-                    className={`bg-red-500/20 border rounded-lg p-3 ${
-                      index === 0
-                        ? "border-red-400 ring-2 ring-red-400 animate-[pulseGlow_2s_ease-in-out_infinite]"
-                        : "border-red-500/50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-lg font-bold text-red-400">#{entry.entryNumber}</span>
-                      <span className="text-white font-medium">{entry.wrestlerName}</span>
-                      {index === 0 && (
-                        <Badge className="bg-red-600 text-white text-xs ml-auto animate-pulse">
-                          LATEST
-                        </Badge>
-                      )}
+                recentEliminations.map((entry) => {
+                  const transitionPhase = cardTransitionPhase.get(entry.id);
+                  const isLatest = entry.id === latestEliminationId;
+
+                  let animationClass = "";
+                  if (transitionPhase === "sliding") {
+                    animationClass = "animate-[slideDownIntoColumn_0.5s_ease-out]";
+                  } else if (transitionPhase === "pulsing" && isLatest) {
+                    animationClass = "animate-[pulseGlow_2s_ease-in-out_infinite]";
+                  }
+
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`bg-red-500/20 border rounded-lg p-3 ${animationClass} ${
+                        isLatest
+                          ? "border-red-400 ring-2 ring-red-400"
+                          : "border-red-500/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-lg font-bold text-red-400">#{entry.entryNumber}</span>
+                        <span className="text-white font-medium">{entry.wrestlerName}</span>
+                        {isLatest && (
+                          <Badge className="bg-red-600 text-white text-xs ml-auto animate-pulse">
+                            LATEST
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-gray-400 text-sm">
+                        by <span className="text-red-300">{entry.eliminatedBy}</span>
+                      </p>
+                      <p className="text-gray-500 text-xs">{getParticipantForEntry(entry.entryNumber)}</p>
                     </div>
-                    <p className="text-gray-400 text-sm">
-                      by <span className="text-red-300">{entry.eliminatedBy}</span>
-                    </p>
-                    <p className="text-gray-500 text-xs">{getParticipantForEntry(entry.entryNumber)}</p>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
