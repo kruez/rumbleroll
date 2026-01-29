@@ -44,7 +44,14 @@ interface ActivityLog {
   type: "entry" | "elimination" | "winner" | "system";
 }
 
-type SimulationMode = "auto" | "manual";
+type SimulationMode = "auto" | "manual" | "overlapping";
+
+const overlappingSimConfig = {
+  minWrestlersBeforeEliminations: 5,
+  eliminationChancePerTick: 0.4,
+  tickInterval: 800,
+  maxActiveWrestlers: 12,
+};
 
 export default function TestDashboardPage({
   params,
@@ -225,6 +232,74 @@ export default function TestDashboardPage({
 
   const stopSimulation = () => {
     stopSimulationRef.current = true;
+  };
+
+  const runOverlappingSimulation = async () => {
+    setSimulationRunning(true);
+    stopSimulationRef.current = false;
+    const delay = (ms: number) =>
+      new Promise((resolve) => setTimeout(resolve, ms));
+
+    let enteredCount = event?.entries.filter((e) => e.wrestlerName).length || 0;
+    let activeCount =
+      event?.entries.filter(
+        (e) => e.wrestlerName && !e.eliminatedAt && !e.isWinner
+      ).length || 0;
+    let hasWinner = false;
+
+    while (!hasWinner && !stopSimulationRef.current) {
+      const canEnter = enteredCount < 30;
+      const canEliminate =
+        activeCount >= overlappingSimConfig.minWrestlersBeforeEliminations;
+
+      // Decide action: enter or eliminate
+      let action: "enter" | "eliminate" | null = null;
+
+      // Force elimination if too many wrestlers in ring
+      if (activeCount >= overlappingSimConfig.maxActiveWrestlers && canEliminate) {
+        action = "eliminate";
+      }
+      // If we can both enter and eliminate, use probability
+      else if (canEnter && canEliminate) {
+        action =
+          Math.random() < overlappingSimConfig.eliminationChancePerTick
+            ? "eliminate"
+            : "enter";
+      }
+      // Only enter if we can't eliminate yet
+      else if (canEnter) {
+        action = "enter";
+      }
+      // Only eliminate if all wrestlers have entered
+      else if (canEliminate) {
+        action = "eliminate";
+      }
+
+      if (!action) break;
+
+      const result = await handleTestAction(action);
+
+      if (action === "enter" && result?.success) {
+        enteredCount++;
+        activeCount++;
+      } else if (action === "eliminate") {
+        if (result?.winner) {
+          hasWinner = true;
+        } else if (result?.success) {
+          activeCount--;
+        }
+      }
+
+      if (!result?.success && action === "enter" && result?.complete) {
+        // All wrestlers entered, continue with eliminations only
+        enteredCount = 30;
+      }
+
+      await delay(overlappingSimConfig.tickInterval);
+    }
+
+    setSimulationRunning(false);
+    stopSimulationRef.current = false;
   };
 
   const handleResetEverything = async () => {
@@ -455,6 +530,17 @@ export default function TestDashboardPage({
                 </button>
                 <button
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    simulationMode === "overlapping"
+                      ? "bg-purple-600 text-white"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                  onClick={() => setSimulationMode("overlapping")}
+                  disabled={simulationRunning}
+                >
+                  Overlapping
+                </button>
+                <button
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                     simulationMode === "manual"
                       ? "bg-purple-600 text-white"
                       : "text-gray-400 hover:text-white"
@@ -507,6 +593,49 @@ export default function TestDashboardPage({
                       {enteredCount < 30
                         ? `Entering wrestlers... ${enteredCount}/30`
                         : `Simulating eliminations... ${activeCount} wrestlers remaining`}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ) : simulationMode === "overlapping" ? (
+              <div className="space-y-4">
+                <p className="text-gray-400 text-sm">
+                  Realistic simulation: eliminations start after {overlappingSimConfig.minWrestlersBeforeEliminations} wrestlers enter.
+                  {" "}Each tick has a {Math.round(overlappingSimConfig.eliminationChancePerTick * 100)}% chance of elimination vs entry.
+                  {" "}Forces elimination when {overlappingSimConfig.maxActiveWrestlers}+ wrestlers are in the ring.
+                </p>
+                <div className="flex gap-4">
+                  {!simulationRunning ? (
+                    <Button
+                      onClick={runOverlappingSimulation}
+                      disabled={actionLoading || winner !== undefined}
+                      className="bg-green-600 hover:bg-green-700 h-16 text-lg flex-1"
+                    >
+                      Run Overlapping Simulation
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={stopSimulation}
+                      variant="destructive"
+                      className="h-16 text-lg flex-1"
+                    >
+                      Stop Simulation
+                    </Button>
+                  )}
+                  <Button
+                    onClick={handleResetEverything}
+                    disabled={actionLoading || simulationRunning}
+                    variant="outline"
+                    className="bg-transparent border-gray-500 text-gray-300 hover:bg-gray-700 h-16 text-lg"
+                  >
+                    Reset
+                  </Button>
+                </div>
+                {simulationRunning && (
+                  <div className="flex items-center justify-center gap-2 text-green-400">
+                    <div className="animate-spin h-4 w-4 border-2 border-green-400 border-t-transparent rounded-full" />
+                    <span>
+                      Simulating... {enteredCount}/30 entered, {activeCount} in ring
                     </span>
                   </div>
                 )}

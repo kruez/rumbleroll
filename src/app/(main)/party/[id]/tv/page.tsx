@@ -1,9 +1,15 @@
 "use client";
 
-import { useEffect, useState, use, useCallback } from "react";
+import { useEffect, useState, use, useCallback, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { QRCodeSVG } from "qrcode.react";
 import { UserAvatar } from "@/components/UserAvatar";
+import { Toaster } from "@/components/ui/sonner";
+import {
+  showEntryAnnouncement,
+  showEliminationAnnouncement,
+  showWinnerAnnouncement,
+} from "@/components/tv/AnnouncementToast";
 
 interface Entry {
   id: string;
@@ -43,10 +49,37 @@ interface Party {
   participants: Participant[];
 }
 
+interface ReplayEvent {
+  type: "entry" | "elimination" | "winner";
+  entry: Entry;
+  timestamp: number;
+}
+
+interface ReplayState {
+  inRing: Set<string>;
+  eliminated: string[];
+}
+
 export default function TVDisplayPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [party, setParty] = useState<Party | null>(null);
   const [loading, setLoading] = useState(true);
+  const [animatingOut, setAnimatingOut] = useState<Set<string>>(new Set());
+
+  // Replay mode state
+  const [replayMode, setReplayMode] = useState(false);
+  const [replayIndex, setReplayIndex] = useState(0);
+  const [replayTimeline, setReplayTimeline] = useState<ReplayEvent[]>([]);
+  const [replayState, setReplayState] = useState<ReplayState>({
+    inRing: new Set(),
+    eliminated: [],
+  });
+  const replayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const winnerTimestampRef = useRef<number | null>(null);
+
+  // Track previous entries for detecting changes
+  const prevEntriesRef = useRef<Entry[]>([]);
+  const hasAnnouncedWinnerRef = useRef(false);
 
   const fetchParty = useCallback(async () => {
     try {
@@ -62,12 +95,199 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     }
   }, [id]);
 
+  // Detect entry/elimination changes and show announcements
+  useEffect(() => {
+    if (!party) return;
+
+    const entries = party.event.entries;
+    const prevEntries = prevEntriesRef.current;
+
+    // Skip initial load (when prevEntries is empty)
+    if (prevEntries.length > 0) {
+      // Detect new entries
+      for (const entry of entries) {
+        const prevEntry = prevEntries.find((e) => e.id === entry.id);
+
+        // New entry (wrestler just entered)
+        if (entry.wrestlerName && (!prevEntry || !prevEntry.wrestlerName)) {
+          showEntryAnnouncement({
+            wrestlerName: entry.wrestlerName,
+            entryNumber: entry.entryNumber,
+          });
+        }
+
+        // New elimination
+        if (entry.eliminatedAt && (!prevEntry || !prevEntry.eliminatedAt)) {
+          if (entry.wrestlerName && entry.eliminatedBy) {
+            // Add to animating out set
+            setAnimatingOut((prev) => new Set(prev).add(entry.id));
+
+            // Remove from animating set after animation completes (600ms)
+            setTimeout(() => {
+              setAnimatingOut((prev) => {
+                const next = new Set(prev);
+                next.delete(entry.id);
+                return next;
+              });
+            }, 600);
+
+            showEliminationAnnouncement({
+              wrestlerName: entry.wrestlerName,
+              eliminatedBy: entry.eliminatedBy,
+              entryNumber: entry.entryNumber,
+            });
+          }
+        }
+
+        // Winner announced
+        if (entry.isWinner && (!prevEntry || !prevEntry.isWinner) && !hasAnnouncedWinnerRef.current) {
+          hasAnnouncedWinnerRef.current = true;
+          if (entry.wrestlerName) {
+            showWinnerAnnouncement(entry.wrestlerName, entry.entryNumber);
+          }
+        }
+      }
+    }
+
+    // Update prev entries reference
+    prevEntriesRef.current = entries;
+  }, [party]);
+
   useEffect(() => {
     fetchParty();
     // Poll for updates every 3 seconds
     const interval = setInterval(fetchParty, 3000);
     return () => clearInterval(interval);
   }, [fetchParty]);
+
+  // Build replay timeline from entries
+  const buildReplayTimeline = useCallback((entries: Entry[]): ReplayEvent[] => {
+    const events: ReplayEvent[] = [];
+
+    for (const entry of entries) {
+      if (entry.enteredAt && entry.wrestlerName) {
+        events.push({
+          type: "entry",
+          entry,
+          timestamp: new Date(entry.enteredAt).getTime(),
+        });
+      }
+      if (entry.eliminatedAt) {
+        events.push({
+          type: "elimination",
+          entry,
+          timestamp: new Date(entry.eliminatedAt).getTime(),
+        });
+      }
+      if (entry.isWinner) {
+        events.push({
+          type: "winner",
+          entry,
+          timestamp: entry.eliminatedAt
+            ? new Date(entry.eliminatedAt).getTime() + 1
+            : Date.now(),
+        });
+      }
+    }
+
+    return events.sort((a, b) => a.timestamp - b.timestamp);
+  }, []);
+
+  // Start replay mode 15 seconds after winner is announced
+  useEffect(() => {
+    if (!party) return;
+
+    const winner = party.event.entries.find((e) => e.isWinner);
+
+    if (winner && !winnerTimestampRef.current) {
+      winnerTimestampRef.current = Date.now();
+    }
+
+    if (winner && winnerTimestampRef.current && !replayMode) {
+      const elapsed = Date.now() - winnerTimestampRef.current;
+      const timeUntilReplay = 15000 - elapsed;
+
+      if (timeUntilReplay <= 0) {
+        // Start replay immediately
+        const timeline = buildReplayTimeline(party.event.entries);
+        setReplayTimeline(timeline);
+        setReplayIndex(0);
+        setReplayState({ inRing: new Set(), eliminated: [] });
+        setReplayMode(true);
+      } else {
+        // Schedule replay start
+        const timeout = setTimeout(() => {
+          const timeline = buildReplayTimeline(party.event.entries);
+          setReplayTimeline(timeline);
+          setReplayIndex(0);
+          setReplayState({ inRing: new Set(), eliminated: [] });
+          setReplayMode(true);
+        }, timeUntilReplay);
+
+        return () => clearTimeout(timeout);
+      }
+    }
+  }, [party, replayMode, buildReplayTimeline]);
+
+  // Process replay events
+  useEffect(() => {
+    if (!replayMode || replayTimeline.length === 0) return;
+
+    const processNextEvent = () => {
+      if (replayIndex >= replayTimeline.length) {
+        // Replay complete, restart after 5 seconds
+        replayTimeoutRef.current = setTimeout(() => {
+          setReplayIndex(0);
+          setReplayState({ inRing: new Set(), eliminated: [] });
+        }, 5000);
+        return;
+      }
+
+      const event = replayTimeline[replayIndex];
+      const delay = event.type === "entry" ? 1000 : event.type === "elimination" ? 2000 : 3000;
+
+      // Show announcement
+      if (event.type === "entry" && event.entry.wrestlerName) {
+        showEntryAnnouncement({
+          wrestlerName: event.entry.wrestlerName,
+          entryNumber: event.entry.entryNumber,
+        });
+        setReplayState((prev) => ({
+          ...prev,
+          inRing: new Set(prev.inRing).add(event.entry.id),
+        }));
+      } else if (event.type === "elimination" && event.entry.wrestlerName && event.entry.eliminatedBy) {
+        showEliminationAnnouncement({
+          wrestlerName: event.entry.wrestlerName,
+          eliminatedBy: event.entry.eliminatedBy,
+          entryNumber: event.entry.entryNumber,
+        });
+        setReplayState((prev) => {
+          const newInRing = new Set(prev.inRing);
+          newInRing.delete(event.entry.id);
+          return {
+            inRing: newInRing,
+            eliminated: [...prev.eliminated, event.entry.id],
+          };
+        });
+      } else if (event.type === "winner" && event.entry.wrestlerName) {
+        showWinnerAnnouncement(event.entry.wrestlerName, event.entry.entryNumber);
+      }
+
+      // Schedule next event
+      replayTimeoutRef.current = setTimeout(() => {
+        setReplayIndex((prev) => prev + 1);
+      }, delay);
+    };
+
+    processNextEvent();
+
+    return () => {
+      if (replayTimeoutRef.current) {
+        clearTimeout(replayTimeoutRef.current);
+      }
+    };
+  }, [replayMode, replayIndex, replayTimeline]);
 
   if (loading) {
     return (
@@ -114,14 +334,28 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
       return b.activeCount - a.activeCount;
     });
 
-  const activeWrestlers = entries
-    .filter((e) => e.wrestlerName && !e.eliminatedAt && !e.isWinner)
-    .sort((a, b) => a.entryNumber - b.entryNumber);
+  // In replay mode, use replay state; otherwise use live data
+  const activeWrestlers = replayMode
+    ? entries
+        .filter((e) => replayState.inRing.has(e.id))
+        .sort((a, b) => a.entryNumber - b.entryNumber)
+    : entries
+        .filter((e) => e.wrestlerName && !e.isWinner && (!e.eliminatedAt || animatingOut.has(e.id)))
+        .sort((a, b) => a.entryNumber - b.entryNumber);
 
-  const recentEliminations = entries
-    .filter((e) => e.eliminatedAt)
-    .sort((a, b) => new Date(b.eliminatedAt!).getTime() - new Date(a.eliminatedAt!).getTime())
-    .slice(0, 5);
+  const recentEliminations = replayMode
+    ? entries
+        .filter((e) => replayState.eliminated.includes(e.id))
+        .sort((a, b) => {
+          const aIdx = replayState.eliminated.indexOf(a.id);
+          const bIdx = replayState.eliminated.indexOf(b.id);
+          return bIdx - aIdx; // Most recent first
+        })
+        .slice(0, 5)
+    : entries
+        .filter((e) => e.eliminatedAt)
+        .sort((a, b) => new Date(b.eliminatedAt!).getTime() - new Date(a.eliminatedAt!).getTime())
+        .slice(0, 5);
 
   const winner = entries.find((e) => e.isWinner);
 
@@ -134,8 +368,56 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     return "Unknown";
   };
 
+  // Dynamic grid sizing based on wrestler count
+  const getGridConfig = (count: number) => {
+    if (count <= 4) return { cols: "grid-cols-2", size: "large" };
+    if (count <= 9) return { cols: "grid-cols-3", size: "medium" };
+    if (count <= 16) return { cols: "grid-cols-4", size: "small" };
+    if (count <= 25) return { cols: "grid-cols-5", size: "xs" };
+    return { cols: "grid-cols-6", size: "xxs" };
+  };
+
+  const gridConfig = getGridConfig(activeWrestlers.length);
+
+  const getCardSizeClasses = (size: string) => {
+    switch (size) {
+      case "large":
+        return "p-3";
+      case "medium":
+        return "p-2.5";
+      case "small":
+        return "p-2";
+      case "xs":
+        return "p-1.5";
+      case "xxs":
+        return "p-1";
+      default:
+        return "p-3";
+    }
+  };
+
+  const getTextSizeClasses = (size: string) => {
+    switch (size) {
+      case "large":
+        return { number: "text-xl", name: "text-base", participant: "text-sm" };
+      case "medium":
+        return { number: "text-lg", name: "text-sm", participant: "text-xs" };
+      case "small":
+        return { number: "text-base", name: "text-xs", participant: "text-xs" };
+      case "xs":
+        return { number: "text-sm", name: "text-xs", participant: "text-xs" };
+      case "xxs":
+        return { number: "text-xs", name: "text-xs", participant: "hidden" };
+      default:
+        return { number: "text-xl", name: "text-base", participant: "text-sm" };
+    }
+  };
+
+  const textSizes = getTextSizeClasses(gridConfig.size);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-6 overflow-hidden">
+      <Toaster position="top-center" expand={true} richColors />
       {/* Header */}
       <div className="text-center mb-6">
         <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-2">{party.event.name}</h1>
@@ -143,7 +425,7 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
       </div>
 
       {/* Winner Celebration */}
-      {winner && (
+      {winner && !replayMode && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 overflow-hidden">
           {/* Spotlight effect */}
           <div className="absolute inset-0 bg-gradient-radial from-yellow-500/30 via-transparent to-transparent animate-pulse" />
@@ -209,8 +491,32 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
               <span className="text-3xl text-white">-</span>
               <span className="text-3xl text-yellow-400 font-bold">{getParticipantForEntry(winner.entryNumber)}</span>
             </div>
+
+            {/* Replay countdown */}
+            <p className="text-gray-400 text-sm mt-8">Replay starting soon...</p>
           </div>
         </div>
+      )}
+
+      {/* Replay Mode Indicator */}
+      {replayMode && (
+        <>
+          {/* Replay badge in header */}
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50">
+            <Badge className="bg-blue-600 text-white text-lg px-4 py-2 animate-pulse">
+              REPLAY
+            </Badge>
+          </div>
+          {/* Progress bar at bottom */}
+          <div className="fixed bottom-0 left-0 right-0 h-2 bg-gray-800 z-50">
+            <div
+              className="h-full bg-blue-500 transition-all duration-300"
+              style={{
+                width: `${replayTimeline.length > 0 ? (replayIndex / replayTimeline.length) * 100 : 0}%`,
+              }}
+            />
+          </div>
+        </>
       )}
 
       {party.status === "LOBBY" ? (
@@ -315,24 +621,31 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
           {/* Center Column */}
           <div className="col-span-5 flex flex-col gap-6">
             {/* In The Ring */}
-            <div className="bg-black/30 rounded-xl p-4 flex-1 overflow-hidden">
+            <div className="bg-black/30 rounded-xl p-4 flex-1 overflow-hidden flex flex-col">
               <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
                 IN THE RING
                 <Badge className="bg-green-500">{activeWrestlers.length}</Badge>
               </h2>
-              <div className="grid grid-cols-2 gap-3 overflow-y-auto max-h-[calc(100%-3rem)]">
-                {activeWrestlers.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="bg-green-500/20 border border-green-500 rounded-lg p-3"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl font-bold text-green-400">#{entry.entryNumber}</span>
-                      <span className="text-white font-medium truncate">{entry.wrestlerName}</span>
+              <div className={`grid ${gridConfig.cols} gap-2 flex-1 content-start`}>
+                {activeWrestlers.map((entry) => {
+                  const isAnimatingOut = animatingOut.has(entry.id);
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`rounded-lg ${getCardSizeClasses(gridConfig.size)} ${
+                        isAnimatingOut
+                          ? "bg-red-500/40 border border-red-500 animate-[fallToRight_0.6s_ease-in_forwards]"
+                          : "bg-green-500/20 border border-green-500 animate-[fadeIn_0.3s_ease-out]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1">
+                        <span className={`${textSizes.number} font-bold ${isAnimatingOut ? "text-red-400" : "text-green-400"}`}>#{entry.entryNumber}</span>
+                        <span className={`text-white font-medium truncate ${textSizes.name}`}>{entry.wrestlerName}</span>
+                      </div>
+                      <p className={`${isAnimatingOut ? "text-red-300" : "text-green-300"} ${textSizes.participant}`}>{getParticipantForEntry(entry.entryNumber)}</p>
                     </div>
-                    <p className="text-green-300 text-sm">{getParticipantForEntry(entry.entryNumber)}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -344,15 +657,30 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
                   const entry = entries.find((e) => e.entryNumber === num);
                   let bgColor = "bg-gray-700";
                   let textColor = "text-gray-400";
-                  if (entry?.isWinner) {
-                    bgColor = "bg-yellow-500";
-                    textColor = "text-black";
-                  } else if (entry?.eliminatedAt) {
-                    bgColor = "bg-red-600/50";
-                    textColor = "text-red-300";
-                  } else if (entry?.wrestlerName) {
-                    bgColor = "bg-green-500";
-                    textColor = "text-white";
+
+                  if (replayMode && entry) {
+                    // Replay mode coloring
+                    const isInRing = replayState.inRing.has(entry.id);
+                    const isEliminated = replayState.eliminated.includes(entry.id);
+                    if (isInRing) {
+                      bgColor = "bg-green-500";
+                      textColor = "text-white";
+                    } else if (isEliminated) {
+                      bgColor = "bg-red-600/50";
+                      textColor = "text-red-300";
+                    }
+                  } else if (entry) {
+                    // Live mode coloring
+                    if (entry.isWinner) {
+                      bgColor = "bg-yellow-500";
+                      textColor = "text-black";
+                    } else if (entry.eliminatedAt) {
+                      bgColor = "bg-red-600/50";
+                      textColor = "text-red-300";
+                    } else if (entry.wrestlerName) {
+                      bgColor = "bg-green-500";
+                      textColor = "text-white";
+                    }
                   }
 
                   return (
@@ -373,21 +701,31 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
             <h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
               ELIMINATIONS
               <Badge className="bg-red-500">
-                {entries.filter((e) => e.eliminatedAt).length}
+                {replayMode ? replayState.eliminated.length : entries.filter((e) => e.eliminatedAt).length}
               </Badge>
+              <span className="text-xs text-gray-500 font-normal ml-auto">(newest first)</span>
             </h2>
             <div className="space-y-3 overflow-y-auto max-h-[calc(100%-3rem)]">
               {recentEliminations.length === 0 ? (
                 <p className="text-gray-500">No eliminations yet</p>
               ) : (
-                recentEliminations.map((entry) => (
+                recentEliminations.map((entry, index) => (
                   <div
                     key={entry.id}
-                    className="bg-red-500/20 border border-red-500/50 rounded-lg p-3"
+                    className={`bg-red-500/20 border rounded-lg p-3 ${
+                      index === 0
+                        ? "border-red-400 ring-2 ring-red-400 animate-[pulseGlow_2s_ease-in-out_infinite]"
+                        : "border-red-500/50"
+                    }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-lg font-bold text-red-400">#{entry.entryNumber}</span>
                       <span className="text-white font-medium">{entry.wrestlerName}</span>
+                      {index === 0 && (
+                        <Badge className="bg-red-600 text-white text-xs ml-auto animate-pulse">
+                          LATEST
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-gray-400 text-sm">
                       by <span className="text-red-300">{entry.eliminatedBy}</span>
