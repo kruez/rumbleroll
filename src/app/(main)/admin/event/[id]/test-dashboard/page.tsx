@@ -70,6 +70,11 @@ export default function TestDashboardPage({
   const [simulationRunning, setSimulationRunning] = useState(false);
   const [activityLog, setActivityLog] = useState<ActivityLog[]>([]);
   const [simulationMode, setSimulationMode] = useState<SimulationMode>("auto");
+  const [simSpeed, setSimSpeed] = useState({
+    entryDelay: 500,
+    eliminationDelay: 1500,
+    tickInterval: 800,
+  });
   const stopSimulationRef = useRef(false);
 
   const addActivityLog = useCallback(
@@ -204,17 +209,17 @@ export default function TestDashboardPage({
     const delay = (ms: number) =>
       new Promise((resolve) => setTimeout(resolve, ms));
 
-    // Phase 1: Enter wrestlers one by one (0.5s delay)
+    // Phase 1: Enter wrestlers one by one
     let allEntered = false;
     while (!allEntered && !stopSimulationRef.current) {
       const result = await handleTestAction("enter");
       if (!result?.success || result?.complete) {
         allEntered = true;
       }
-      await delay(500);
+      await delay(simSpeed.entryDelay);
     }
 
-    // Phase 2: Eliminations (1.5s delay)
+    // Phase 2: Eliminations
     let hasWinner = false;
     while (!hasWinner && !stopSimulationRef.current) {
       const result = await handleTestAction("eliminate");
@@ -223,7 +228,7 @@ export default function TestDashboardPage({
       } else if (!result?.success) {
         break;
       }
-      await delay(1500);
+      await delay(simSpeed.eliminationDelay);
     }
 
     setSimulationRunning(false);
@@ -293,7 +298,7 @@ export default function TestDashboardPage({
         hasWinner = true;
       }
 
-      await delay(overlappingSimConfig.tickInterval);
+      await delay(simSpeed.tickInterval);
     }
 
     setSimulationRunning(false);
@@ -552,10 +557,42 @@ export default function TestDashboardPage({
             </CardTitle>
           </CardHeader>
           <CardContent>
+            {/* Speed Presets */}
+            <div className="flex items-center gap-2 mb-4 pb-4 border-b border-gray-700">
+              <span className="text-gray-400 text-sm">Speed:</span>
+              <Button
+                size="sm"
+                variant={simSpeed.entryDelay === 200 ? "default" : "outline"}
+                className={simSpeed.entryDelay === 200 ? "bg-green-600 hover:bg-green-700" : "bg-transparent border-gray-600 text-gray-400 hover:text-white"}
+                onClick={() => setSimSpeed({ entryDelay: 200, eliminationDelay: 500, tickInterval: 300 })}
+                disabled={simulationRunning}
+              >
+                Fast
+              </Button>
+              <Button
+                size="sm"
+                variant={simSpeed.entryDelay === 500 ? "default" : "outline"}
+                className={simSpeed.entryDelay === 500 ? "bg-blue-600 hover:bg-blue-700" : "bg-transparent border-gray-600 text-gray-400 hover:text-white"}
+                onClick={() => setSimSpeed({ entryDelay: 500, eliminationDelay: 1500, tickInterval: 800 })}
+                disabled={simulationRunning}
+              >
+                Normal
+              </Button>
+              <Button
+                size="sm"
+                variant={simSpeed.entryDelay === 2000 ? "default" : "outline"}
+                className={simSpeed.entryDelay === 2000 ? "bg-amber-600 hover:bg-amber-700" : "bg-transparent border-gray-600 text-gray-400 hover:text-white"}
+                onClick={() => setSimSpeed({ entryDelay: 2000, eliminationDelay: 4000, tickInterval: 2000 })}
+                disabled={simulationRunning}
+              >
+                Slow
+              </Button>
+            </div>
+
             {simulationMode === "auto" ? (
               <div className="space-y-4">
                 <p className="text-gray-400 text-sm">
-                  Runs the full simulation automatically: wrestlers enter one-by-one (0.5s delay), then eliminations occur (1.5s delay) until a winner is declared.
+                  Runs the full simulation automatically: wrestlers enter one-by-one, then eliminations occur until a winner is declared.
                 </p>
                 <div className="flex gap-4">
                   {!simulationRunning ? (
