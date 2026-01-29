@@ -319,7 +319,7 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
 
   // Up Next badge management
   const lastShownEntryNumberRef = useRef<number>(0);
-  const showingEnteredRef = useRef<boolean>(false);
+  const [showingEntered, setShowingEntered] = useState(false);
   const enteredDisplayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -351,7 +351,7 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     if (highestEntered && highestEntered.entryNumber > lastShownEntryNumberRef.current) {
       // New entry detected - show "entered" state
       lastShownEntryNumberRef.current = highestEntered.entryNumber;
-      showingEnteredRef.current = true;
+      setShowingEntered(true);
 
       const participantInfo = getParticipantInfoForEntry(highestEntered.entryNumber);
       if (participantInfo) {
@@ -368,15 +368,13 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
           clearTimeout(enteredDisplayTimeoutRef.current);
         }
 
-        // After 3 seconds, clear the "showing entered" flag - this triggers a re-render
-        // which will cause the effect to run again and show the next pending
+        // After 3 seconds, clear the "showing entered" flag
+        // This state change triggers a re-run of this effect with fresh party data
         enteredDisplayTimeoutRef.current = setTimeout(() => {
-          showingEnteredRef.current = false;
-          // Force update by setting mode, which will trigger re-evaluation
-          setUpNextMode("pending");
+          setShowingEntered(false);
         }, 3000);
       }
-    } else if (!showingEnteredRef.current && nextPending) {
+    } else if (!showingEntered && nextPending) {
       // Not showing an "entered" state, show the next pending entry
       const info = getParticipantInfoForEntry(nextPending.entryNumber);
       if (info) {
@@ -394,7 +392,7 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
         clearTimeout(enteredDisplayTimeoutRef.current);
       }
     };
-  }, [party, getParticipantInfoForEntry]);
+  }, [party, getParticipantInfoForEntry, showingEntered]);
 
   // Auto-trigger winner celebration when winner is detected
   useEffect(() => {
