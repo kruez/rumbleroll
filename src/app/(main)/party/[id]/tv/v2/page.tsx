@@ -659,9 +659,18 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                       </div>
                     )}
                     <span className="text-4xl font-black text-white/90">{num}</span>
-                    <p className="text-xl font-bold truncate w-full text-center mt-1 text-white/80">
-                      {participantInfo?.name || "Unassigned"}
-                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      {participantInfo?.profileImageUrl && (
+                        <img
+                          src={participantInfo.profileImageUrl}
+                          alt=""
+                          className="w-7 h-7 rounded-full flex-shrink-0"
+                        />
+                      )}
+                      <p className="text-2xl font-bold truncate text-white/80">
+                        {participantInfo?.name || "Unassigned"}
+                      </p>
+                    </div>
                     <span className={`text-sm mt-2 font-medium ${num === nextUpEntryNumber ? "text-purple-300" : "text-gray-500"}`}>
                       {num === nextUpEntryNumber ? "UP NEXT" : "WAITING"}
                     </span>
@@ -685,10 +694,10 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                         <img
                           src={participantInfo.profileImageUrl}
                           alt=""
-                          className="w-6 h-6 rounded-full flex-shrink-0"
+                          className="w-7 h-7 rounded-full flex-shrink-0"
                         />
                       )}
-                      <p className="text-lg font-semibold truncate text-white/80">
+                      <p className="text-xl font-bold truncate text-white/80">
                         {participantInfo?.name}
                       </p>
                     </div>
@@ -710,10 +719,10 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                           <img
                             src={participantInfo.profileImageUrl}
                             alt=""
-                            className="w-5 h-5 rounded-full flex-shrink-0 opacity-70"
+                            className="w-6 h-6 rounded-full flex-shrink-0 opacity-70"
                           />
                         )}
-                        <span className="text-base text-gray-300 truncate">{participantInfo?.name}</span>
+                        <span className="text-lg font-bold text-gray-300 truncate">{participantInfo?.name}</span>
                       </div>
                       <span className="font-mono text-lg font-bold text-white/70 flex-shrink-0 ml-2">
                         {formatDuration(entry.enteredAt, entry.eliminatedAt)}
@@ -732,9 +741,18 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                     <p className="text-2xl font-black text-white truncate flex-1 flex items-center">
                       {entry.wrestlerName}
                     </p>
-                    <p className="text-base text-yellow-200 truncate">
-                      {participantInfo?.name}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      {participantInfo?.profileImageUrl && (
+                        <img
+                          src={participantInfo.profileImageUrl}
+                          alt=""
+                          className="w-6 h-6 rounded-full flex-shrink-0"
+                        />
+                      )}
+                      <p className="text-lg font-bold text-yellow-200 truncate">
+                        {participantInfo?.name}
+                      </p>
+                    </div>
                   </div>
                 )}
 
@@ -747,9 +765,18 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                     <p className="text-xl font-bold text-white/70 truncate">
                       {entry.wrestlerName}
                     </p>
-                    <p className="text-sm text-white/50 truncate mt-auto">
-                      {participantInfo?.name}
-                    </p>
+                    <div className="flex items-center gap-2 mt-auto">
+                      {participantInfo?.profileImageUrl && (
+                        <img
+                          src={participantInfo.profileImageUrl}
+                          alt=""
+                          className="w-6 h-6 rounded-full flex-shrink-0 opacity-70"
+                        />
+                      )}
+                      <p className="text-lg font-bold text-white/50 truncate">
+                        {participantInfo?.name}
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
