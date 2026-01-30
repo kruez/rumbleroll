@@ -36,9 +36,9 @@ export async function PATCH(
 
     // Build update data
     const updateData: {
-      wrestlerName?: string;
+      wrestlerName?: string | null;
       wrestlerImageUrl?: string | null;
-      enteredAt?: Date;
+      enteredAt?: Date | null;
       eliminatedBy?: string | null;
       eliminatedAt?: Date | null;
       isWinner?: boolean;
@@ -46,17 +46,28 @@ export async function PATCH(
 
     // If setting wrestler name for the first time, set enteredAt
     // Only set enteredAt if event is IN_PROGRESS (not for pre-staging)
+    // If clearing wrestler (null/empty), reset all entry fields
     if (wrestlerName !== undefined) {
-      updateData.wrestlerName = wrestlerName;
+      if (!wrestlerName || wrestlerName.trim() === "") {
+        // Clearing the wrestler - reset all fields
+        updateData.wrestlerName = null;
+        updateData.wrestlerImageUrl = null;
+        updateData.enteredAt = null;
+        updateData.eliminatedBy = null;
+        updateData.eliminatedAt = null;
+        updateData.isWinner = false;
+      } else {
+        updateData.wrestlerName = wrestlerName;
 
-      if (wrestlerName && !entry.enteredAt) {
-        const event = await prisma.rumbleEvent.findUnique({
-          where: { id: eventId },
-          select: { status: true },
-        });
+        if (!entry.enteredAt) {
+          const event = await prisma.rumbleEvent.findUnique({
+            where: { id: eventId },
+            select: { status: true },
+          });
 
-        if (event?.status === "IN_PROGRESS") {
-          updateData.enteredAt = new Date();
+          if (event?.status === "IN_PROGRESS") {
+            updateData.enteredAt = new Date();
+          }
         }
       }
     }

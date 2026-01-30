@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { WrestlerAutocomplete } from "@/components/ui/wrestler-autocomplete";
 import { Header } from "@/components/Header";
 import {
@@ -57,6 +58,19 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [forceDeleteDialogOpen, setForceDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Entry editing state
+  const [editingWrestlerEntry, setEditingWrestlerEntry] = useState<number | null>(null);
+  const [editWrestlerInput, setEditWrestlerInput] = useState("");
+  const [editWrestlerImageUrl, setEditWrestlerImageUrl] = useState<string | null>(null);
+
+  // Quick-add wrestler state
+  const [quickAddDialogOpen, setQuickAddDialogOpen] = useState(false);
+  const [quickAddName, setQuickAddName] = useState("");
+  const [quickAddImageUrl, setQuickAddImageUrl] = useState("");
+  const [quickAddBrand, setQuickAddBrand] = useState("");
+  const [quickAdding, setQuickAdding] = useState(false);
+  const [quickAddEntryNumber, setQuickAddEntryNumber] = useState<number | null>(null);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -222,6 +236,120 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
       console.error("Failed to reset event:", error);
     } finally {
       setResetting(false);
+    }
+  };
+
+  const handleStartEditWrestler = (entryNumber: number, currentName: string, currentImageUrl: string | null) => {
+    setEditingWrestlerEntry(entryNumber);
+    setEditWrestlerInput(currentName);
+    setEditWrestlerImageUrl(currentImageUrl);
+  };
+
+  const handleCancelEditWrestler = () => {
+    setEditingWrestlerEntry(null);
+    setEditWrestlerInput("");
+    setEditWrestlerImageUrl(null);
+  };
+
+  const handleSaveEditWrestler = async (entryNumber: number) => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/events/${id}/entries`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entryNumber,
+          wrestlerName: editWrestlerInput.trim() || null,
+          wrestlerImageUrl: editWrestlerImageUrl,
+        }),
+      });
+      if (res.ok) {
+        setEditingWrestlerEntry(null);
+        setEditWrestlerInput("");
+        setEditWrestlerImageUrl(null);
+        fetchEvent();
+      }
+    } catch (error) {
+      console.error("Failed to update wrestler:", error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClearWrestler = async (entryNumber: number) => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/events/${id}/entries`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entryNumber,
+          wrestlerName: null,
+        }),
+      });
+      if (res.ok) {
+        setEditingWrestlerEntry(null);
+        setEditWrestlerInput("");
+        setEditWrestlerImageUrl(null);
+        fetchEvent();
+      }
+    } catch (error) {
+      console.error("Failed to clear wrestler:", error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleQuickAddRequest = (name: string, entryNumber: number) => {
+    setQuickAddName(name);
+    setQuickAddImageUrl("");
+    setQuickAddBrand("");
+    setQuickAddEntryNumber(entryNumber);
+    setQuickAddDialogOpen(true);
+  };
+
+  const handleQuickAddSubmit = async () => {
+    if (!quickAddName.trim()) return;
+    setQuickAdding(true);
+    try {
+      // Create the wrestler
+      const createRes = await fetch("/api/admin/wrestlers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: quickAddName.trim(),
+          imageUrl: quickAddImageUrl.trim() || undefined,
+          brand: quickAddBrand && quickAddBrand !== "none" ? quickAddBrand : undefined,
+        }),
+      });
+      const createData = await createRes.json();
+
+      if (createRes.ok && quickAddEntryNumber) {
+        // Set the wrestler on the entry
+        const newWrestler = createData.wrestler;
+        const res = await fetch(`/api/admin/events/${id}/entries`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            entryNumber: quickAddEntryNumber,
+            wrestlerName: newWrestler.name,
+            wrestlerImageUrl: newWrestler.imageUrl,
+          }),
+        });
+        if (res.ok) {
+          setQuickAddDialogOpen(false);
+          setEditingEntry(null);
+          setWrestlerInput("");
+          setWrestlerImageUrl(null);
+          fetchEvent();
+        }
+      } else if (!createRes.ok) {
+        alert(createData.error || "Failed to add wrestler");
+      }
+    } catch (error) {
+      console.error("Failed to quick-add wrestler:", error);
+    } finally {
+      setQuickAdding(false);
     }
   };
 
@@ -430,6 +558,8 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
                     }}
                     placeholder="Search wrestlers..."
                     autoFocus
+                    allowCreate
+                    onCreateRequest={(name) => handleQuickAddRequest(name, nextEntry.entryNumber)}
                   />
                 </div>
                 <Button
@@ -476,6 +606,8 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
                                 setWrestlerImageUrl(imageUrl ?? null);
                               }}
                               placeholder="Search wrestlers..."
+                              allowCreate
+                              onCreateRequest={(name) => handleQuickAddRequest(name, num)}
                             />
                           </div>
                           <Button
@@ -520,17 +652,67 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
                   </div>
                   <div className="flex-1">
                     {entry.wrestlerName ? (
-                      <div>
-                        <span className="text-white font-medium">{entry.wrestlerName}</span>
-                        {entry.isWinner && (
-                          <Badge className="ml-2 bg-yellow-500 text-black">WINNER</Badge>
-                        )}
-                        {entry.eliminatedAt && entry.eliminatedBy && (
-                          <span className="text-red-400 text-sm ml-2">
-                            Eliminated by {entry.eliminatedBy}
-                          </span>
-                        )}
-                      </div>
+                      editingWrestlerEntry === entry.entryNumber ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-48">
+                            <WrestlerAutocomplete
+                              value={editWrestlerInput}
+                              onChange={(value, imageUrl) => {
+                                setEditWrestlerInput(value);
+                                setEditWrestlerImageUrl(imageUrl ?? null);
+                              }}
+                              placeholder="Search wrestlers..."
+                              autoFocus
+                            />
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => handleSaveEditWrestler(entry.entryNumber)}
+                            disabled={saving}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleClearWrestler(entry.entryNumber)}
+                            disabled={saving}
+                          >
+                            Clear
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleCancelEditWrestler}
+                            className="border-gray-500 text-gray-300 hover:bg-gray-700"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-medium">{entry.wrestlerName}</span>
+                          {entry.isWinner && (
+                            <Badge className="bg-yellow-500 text-black">WINNER</Badge>
+                          )}
+                          {entry.eliminatedAt && entry.eliminatedBy && (
+                            <span className="text-red-400 text-sm">
+                              Eliminated by {entry.eliminatedBy}
+                            </span>
+                          )}
+                          {!entry.isWinner && !entry.eliminatedAt && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleStartEditWrestler(entry.entryNumber, entry.wrestlerName!, entry.wrestlerImageUrl)}
+                              className="text-gray-400 hover:text-white hover:bg-gray-700 h-6 px-2"
+                            >
+                              Edit
+                            </Button>
+                          )}
+                        </div>
+                      )
                     ) : (
                       <span className="text-gray-500">Not entered yet</span>
                     )}
@@ -549,6 +731,8 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
                                 setWrestlerImageUrl(imageUrl ?? null);
                               }}
                               placeholder="Search wrestlers..."
+                              allowCreate
+                              onCreateRequest={(name) => handleQuickAddRequest(name, entry.entryNumber)}
                             />
                           </div>
                           <Button
@@ -717,6 +901,65 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
               className="bg-red-700 hover:bg-red-800"
             >
               {deleting ? "Deleting..." : "Force Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Add Wrestler Dialog */}
+      <Dialog open={quickAddDialogOpen} onOpenChange={setQuickAddDialogOpen}>
+        <DialogContent className="bg-gray-800 border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Add Wrestler to Database</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Create a new wrestler and add them to entry #{quickAddEntryNumber}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="quickAddName" className="text-white">Name *</Label>
+              <Input
+                id="quickAddName"
+                value={quickAddName}
+                onChange={(e) => setQuickAddName(e.target.value)}
+                className="bg-gray-700 border-gray-600 text-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="quickAddImageUrl" className="text-white">Image URL (optional)</Label>
+              <Input
+                id="quickAddImageUrl"
+                value={quickAddImageUrl}
+                onChange={(e) => setQuickAddImageUrl(e.target.value)}
+                placeholder="https://..."
+                className="bg-gray-700 border-gray-600 text-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="quickAddBrand" className="text-white">Brand (optional)</Label>
+              <Input
+                id="quickAddBrand"
+                value={quickAddBrand}
+                onChange={(e) => setQuickAddBrand(e.target.value)}
+                placeholder="e.g., Raw, SmackDown, NXT"
+                className="bg-gray-700 border-gray-600 text-white"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setQuickAddDialogOpen(false)}
+              className="bg-transparent border-gray-500 text-gray-300 hover:bg-gray-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleQuickAddSubmit}
+              disabled={quickAdding || !quickAddName.trim()}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              {quickAdding ? "Adding..." : "Add & Select"}
             </Button>
           </DialogFooter>
         </DialogContent>

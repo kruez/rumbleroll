@@ -19,6 +19,8 @@ interface WrestlerAutocompleteProps {
   className?: string;
   disabled?: boolean;
   autoFocus?: boolean;
+  allowCreate?: boolean;
+  onCreateRequest?: (name: string) => void;
 }
 
 export function WrestlerAutocomplete({
@@ -29,6 +31,8 @@ export function WrestlerAutocomplete({
   className,
   disabled,
   autoFocus,
+  allowCreate = false,
+  onCreateRequest,
 }: WrestlerAutocompleteProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [results, setResults] = React.useState<WrestlerResult[]>([]);
@@ -262,10 +266,34 @@ export function WrestlerAutocomplete({
         </ul>
       )}
 
-      {/* No results message */}
+      {/* No results message with optional create button */}
       {isOpen && results.length === 0 && value.length >= 2 && !loading && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-gray-400">
-          No wrestlers found
+        <div className="absolute z-50 mt-1 w-full rounded-md border border-gray-600 bg-gray-800 shadow-lg">
+          {allowCreate && onCreateRequest ? (
+            <button
+              type="button"
+              onClick={() => {
+                onCreateRequest(value);
+                setIsOpen(false);
+              }}
+              className="w-full px-3 py-2 text-left text-sm text-purple-400 hover:bg-purple-600/30 transition-colors flex items-center gap-2"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add &quot;{value}&quot; to wrestler database
+            </button>
+          ) : (
+            <div className="px-3 py-2 text-sm text-gray-400">
+              No wrestlers found
+            </div>
+          )}
         </div>
       )}
     </div>

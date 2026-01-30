@@ -9,6 +9,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Header } from "@/components/Header";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface ScrapeStats {
   source: string;
@@ -33,6 +48,20 @@ export default function WrestlerManagementPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Array<{ id: string; name: string; imageUrl: string | null; brand: string | null; source: string }>>([]);
   const [searching, setSearching] = useState(false);
+
+  // Edit wrestler state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingWrestler, setEditingWrestler] = useState<{ id: string; name: string; imageUrl: string | null; brand: string | null } | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editImageUrl, setEditImageUrl] = useState("");
+  const [editBrand, setEditBrand] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [editResult, setEditResult] = useState<{ success: boolean; error?: string } | null>(null);
+
+  // Deactivate wrestler state
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
+  const [deactivatingWrestler, setDeactivatingWrestler] = useState<{ id: string; name: string } | null>(null);
+  const [deactivating, setDeactivating] = useState(false);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -126,6 +155,76 @@ export default function WrestlerManagementPage() {
       setAddResult({ success: false, error: "Request failed" });
     } finally {
       setAdding(false);
+    }
+  };
+
+  const handleOpenEditDialog = (wrestler: { id: string; name: string; imageUrl: string | null; brand: string | null }) => {
+    setEditingWrestler(wrestler);
+    setEditName(wrestler.name);
+    setEditImageUrl(wrestler.imageUrl || "");
+    setEditBrand(wrestler.brand || "");
+    setEditResult(null);
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingWrestler || !editName.trim()) return;
+    setSaving(true);
+    setEditResult(null);
+    try {
+      const res = await fetch(`/api/admin/wrestlers/${editingWrestler.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editName.trim(),
+          imageUrl: editImageUrl.trim() || null,
+          brand: editBrand && editBrand !== "none" ? editBrand : null,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setEditResult({ success: true });
+        setEditDialogOpen(false);
+        // Refresh search results
+        if (searchQuery.length >= 2) {
+          handleSearch(searchQuery);
+        }
+        fetchStats();
+      } else {
+        setEditResult({ success: false, error: data.error });
+      }
+    } catch (error) {
+      console.error("Failed to update wrestler:", error);
+      setEditResult({ success: false, error: "Request failed" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleOpenDeactivateDialog = (wrestler: { id: string; name: string }) => {
+    setDeactivatingWrestler(wrestler);
+    setDeactivateDialogOpen(true);
+  };
+
+  const handleDeactivate = async () => {
+    if (!deactivatingWrestler) return;
+    setDeactivating(true);
+    try {
+      const res = await fetch(`/api/admin/wrestlers/${deactivatingWrestler.id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setDeactivateDialogOpen(false);
+        // Refresh search results
+        if (searchQuery.length >= 2) {
+          handleSearch(searchQuery);
+        }
+        fetchStats();
+      }
+    } catch (error) {
+      console.error("Failed to deactivate wrestler:", error);
+    } finally {
+      setDeactivating(false);
     }
   };
 
@@ -299,6 +398,24 @@ export default function WrestlerManagementPage() {
                           <span className="text-gray-500">({w.source})</span>
                         </p>
                       </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenEditDialog(w)}
+                          className="border-gray-500 text-gray-300 hover:bg-gray-600"
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleOpenDeactivateDialog(w)}
+                          className="bg-red-600/50 hover:bg-red-600"
+                        >
+                          Deactivate
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -388,6 +505,103 @@ export default function WrestlerManagementPage() {
           </CardContent>
         </Card>
       </main>
+
+      {/* Edit Wrestler Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="bg-gray-800 border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Edit Wrestler</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Update wrestler information
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="editName" className="text-white">Name *</Label>
+              <Input
+                id="editName"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="bg-gray-700 border-gray-600 text-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editImageUrl" className="text-white">Image URL</Label>
+              <Input
+                id="editImageUrl"
+                value={editImageUrl}
+                onChange={(e) => setEditImageUrl(e.target.value)}
+                placeholder="https://..."
+                className="bg-gray-700 border-gray-600 text-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editBrand" className="text-white">Brand</Label>
+              <Select value={editBrand} onValueChange={setEditBrand}>
+                <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                  <SelectValue placeholder="Select brand" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-700 border-gray-600">
+                  <SelectItem value="none" className="text-gray-400">No brand</SelectItem>
+                  <SelectItem value="Raw" className="text-red-400">Raw</SelectItem>
+                  <SelectItem value="SmackDown" className="text-blue-400">SmackDown</SelectItem>
+                  <SelectItem value="NXT" className="text-yellow-400">NXT</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {editResult && !editResult.success && (
+              <div className="p-3 rounded-lg bg-red-900/30 border border-red-500">
+                <p className="text-red-400 text-sm">{editResult.error}</p>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setEditDialogOpen(false)}
+              className="bg-transparent border-gray-500 text-gray-300 hover:bg-gray-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveEdit}
+              disabled={saving || !editName.trim()}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              {saving ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Deactivate Wrestler Confirmation Dialog */}
+      <Dialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
+        <DialogContent className="bg-gray-800 border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Deactivate Wrestler?</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              This will remove &quot;{deactivatingWrestler?.name}&quot; from the autocomplete suggestions.
+              The wrestler can be reactivated later if needed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeactivateDialogOpen(false)}
+              className="bg-transparent border-gray-500 text-gray-300 hover:bg-gray-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeactivate}
+              disabled={deactivating}
+            >
+              {deactivating ? "Deactivating..." : "Deactivate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
