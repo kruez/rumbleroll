@@ -290,6 +290,14 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button
+                    onClick={() => handleTestModeAction("refreshProfileImages")}
+                    disabled={testModeLoading}
+                    variant="outline"
+                    className="border-blue-500 text-blue-400 hover:bg-blue-500/20"
+                  >
+                    {testModeLoading ? "..." : "Refresh Profile Images"}
+                  </Button>
+                  <Button
                     onClick={() => handleTestModeAction("removeTestPlayers")}
                     disabled={testModeLoading}
                     variant="outline"
