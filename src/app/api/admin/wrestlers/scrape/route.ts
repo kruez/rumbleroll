@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { runWWEScrape } from "@/lib/scrapers";
+import { runWWEScrape, runSmackdownHotelScrape } from "@/lib/scrapers";
 import { invalidateWrestlerCache } from "@/lib/wrestlers/cache";
 
-// POST /api/admin/wrestlers/scrape - Trigger WWE scrape
+type ScrapeSource = "smackdownhotel" | "wwe";
+
+// POST /api/admin/wrestlers/scrape - Trigger wrestler scrape
 export async function POST(request: Request) {
   try {
     const session = await auth();
@@ -13,9 +15,13 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => ({}));
     const force = body.force === true;
+    const source: ScrapeSource = body.source || "smackdownhotel";
 
-    // Run the scrape
-    const result = await runWWEScrape(force);
+    // Run the appropriate scraper
+    const result =
+      source === "wwe"
+        ? await runWWEScrape(force)
+        : await runSmackdownHotelScrape(force);
 
     // Invalidate cache so new data is picked up
     if (result.success) {
@@ -25,6 +31,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: result.success,
       totalCount: result.totalCount,
+      source,
       errorMessage: result.errorMessage,
     });
   } catch (error) {

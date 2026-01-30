@@ -3,7 +3,7 @@ export interface ScrapedWrestler {
   slug: string;
   imageUrl: string | null;
   brand: string | null;
-  source: "wwe";
+  source: "wwe" | "smackdownhotel";
   sourceId?: string;
 }
 
