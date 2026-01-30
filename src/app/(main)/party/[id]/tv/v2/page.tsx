@@ -399,6 +399,9 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
 
   // Start celebration replay 5 seconds after winner is shown
   useEffect(() => {
+    // DISABLED: Match replay is malfunctioning - showing same wrestler repeatedly
+    return;
+
     if (!party) return;
 
     const winner = party.event.entries.find((e) => e.isWinner);
@@ -1100,8 +1103,20 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
 
                 {/* ===== ACTIVE CARD ===== */}
                 {state === "active" && entry && (
-                  <div className="flex flex-col h-full relative z-10">
-                    <div className="flex items-center justify-between mb-1">
+                  <>
+                    {entry.wrestlerImageUrl && (
+                      <div className="absolute inset-0 overflow-hidden rounded-lg">
+                        <img
+                          src={entry.wrestlerImageUrl}
+                          alt=""
+                          className="w-full h-full object-cover opacity-15 blur-[1px]"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                      </div>
+                    )}
+                    <div className="flex flex-col h-full relative z-10">
+                      <div className="flex items-center justify-between mb-1">
                       <span className="text-lg font-bold text-white">{num}</span>
                       <span className="text-xl font-mono font-bold bg-black/40 px-2 py-1 rounded text-white">
                         {formatDuration(entry.enteredAt, null)}
@@ -1136,15 +1151,28 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                         {participantInfo?.name}
                       </p>
                     </div>
-                  </div>
+                    </div>
+                  </>
                 )}
 
                 {/* ===== ELIMINATED CARD ===== */}
                 {state === "eliminated" && entry && !isShowingSkull && (
-                  <div className="flex flex-col h-full relative z-10">
-                    <span className="inline-block bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded mb-1 self-start">
-                      ELIMINATED
-                    </span>
+                  <>
+                    {entry.wrestlerImageUrl && (
+                      <div className="absolute inset-0 overflow-hidden rounded-lg">
+                        <img
+                          src={entry.wrestlerImageUrl}
+                          alt=""
+                          className="w-full h-full object-cover opacity-10 blur-[1px] grayscale"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                      </div>
+                    )}
+                    <div className="flex flex-col h-full relative z-10">
+                      <span className="inline-block bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded mb-1 self-start">
+                        ELIMINATED
+                      </span>
                     <div className="flex items-center gap-2">
                       {entry.wrestlerImageUrl && (
                         <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-700 flex-shrink-0 opacity-50 grayscale">
@@ -1177,16 +1205,29 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                         {formatDuration(entry.enteredAt, entry.eliminatedAt)}
                       </span>
                     </div>
-                  </div>
+                    </div>
+                  </>
                 )}
 
                 {/* ===== WINNER CARD ===== */}
                 {state === "winner" && entry && (
-                  <div className="flex flex-col h-full relative z-10">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-lg font-bold text-yellow-300">{num}</span>
-                      <span className="text-yellow-400 text-2xl">👑</span>
-                    </div>
+                  <>
+                    {entry.wrestlerImageUrl && (
+                      <div className="absolute inset-0 overflow-hidden rounded-lg">
+                        <img
+                          src={entry.wrestlerImageUrl}
+                          alt=""
+                          className="w-full h-full object-cover opacity-20 blur-[1px]"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-yellow-900/60 to-transparent" />
+                      </div>
+                    )}
+                    <div className="flex flex-col h-full relative z-10">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-lg font-bold text-yellow-300">{num}</span>
+                        <span className="text-yellow-400 text-2xl">👑</span>
+                      </div>
                     <div className="flex items-center gap-2 flex-1">
                       {entry.wrestlerImageUrl && (
                         <div className="w-12 h-12 rounded-full overflow-hidden bg-yellow-700/50 flex-shrink-0 ring-2 ring-yellow-400">
@@ -1216,15 +1257,28 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                         {participantInfo?.name}
                       </p>
                     </div>
-                  </div>
+                    </div>
+                  </>
                 )}
 
                 {/* Skull animation overlay (during elimination) */}
                 {isShowingSkull && entry && (
-                  <div className="flex flex-col h-full relative z-10">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-lg font-bold text-white">{num}</span>
-                    </div>
+                  <>
+                    {entry.wrestlerImageUrl && (
+                      <div className="absolute inset-0 overflow-hidden rounded-lg">
+                        <img
+                          src={entry.wrestlerImageUrl}
+                          alt=""
+                          className="w-full h-full object-cover opacity-15 blur-[1px]"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                      </div>
+                    )}
+                    <div className="flex flex-col h-full relative z-10">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-lg font-bold text-white">{num}</span>
+                      </div>
                     <p className="text-xl font-bold text-white/70 leading-tight">
                       {entry.wrestlerName}
                     </p>
@@ -1240,7 +1294,8 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                         {participantInfo?.name}
                       </p>
                     </div>
-                  </div>
+                    </div>
+                  </>
                 )}
               </div>
             );

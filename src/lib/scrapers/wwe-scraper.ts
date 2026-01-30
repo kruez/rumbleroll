@@ -16,80 +16,74 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Parse wrestler data from WWE superstar page HTML
+ * WWE.com structure (as of 2025):
+ * <a href="/superstars/drew-mcintyre">
+ *   <img src="..." alt="Drew McIntyre">
+ *   <h3>Drew McIntyre</h3>
+ * </a>
  */
 function parseWrestlerCards($: cheerio.CheerioAPI, brand: string): ScrapedWrestler[] {
   const wrestlers: ScrapedWrestler[] = [];
+  const seenSlugs = new Set<string>();
 
-  // WWE uses different selectors depending on page structure
-  // Try multiple possible selectors for wrestler cards
-  const cardSelectors = [
-    ".superstars-container .superstar-card",
-    ".superstars-list .superstar-item",
-    "[data-testid='superstar-card']",
-    ".wrestler-card",
-    "article.superstar",
-    ".superstars__list-item",
-    "a[href*='/superstars/']",
-  ];
+  // Primary selector: anchor links to superstar pages
+  $("a[href*='/superstars/']").each((_, el) => {
+    const $card = $(el);
+    const href = $card.attr("href") || "";
 
-  for (const selector of cardSelectors) {
-    const cards = $(selector);
-    if (cards.length > 0) {
-      cards.each((_, el) => {
-        const $card = $(el);
+    // Extract slug from href - must be a valid superstar page link
+    const slugMatch = href.match(/\/superstars\/([a-z0-9-]+)(?:\/|$|\?)/i);
+    if (!slugMatch) return;
 
-        // Try to extract name
-        let name =
-          $card.find("h2, h3, .superstar-name, .name, [data-testid='superstar-name']").first().text().trim() ||
-          $card.attr("title") ||
-          $card.find("img").attr("alt") ||
-          "";
+    const slug = slugMatch[1].toLowerCase();
 
-        if (!name) return;
+    // Skip if we've already seen this wrestler (avoid duplicates from multiple links)
+    if (seenSlugs.has(slug)) return;
 
-        // Try to extract slug from href
-        let slug = "";
-        const href = $card.attr("href") || $card.find("a").first().attr("href") || "";
-        const slugMatch = href.match(/\/superstars\/([^/?]+)/);
-        if (slugMatch) {
-          slug = slugMatch[1];
-        } else {
-          // Generate slug from name
-          slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-        }
+    // Extract name - try multiple sources
+    let name =
+      $card.find("h2, h3, h4").first().text().trim() ||
+      $card.find("img").attr("alt")?.trim() ||
+      $card.attr("title")?.trim() ||
+      "";
 
-        // Try to extract image URL
-        let imageUrl: string | null = null;
-        const imgEl = $card.find("img").first();
-        if (imgEl.length > 0) {
-          imageUrl =
-            imgEl.attr("src") ||
-            imgEl.attr("data-src") ||
-            imgEl.attr("data-lazy-src") ||
-            null;
+    // Skip if no name found or if it's a navigation/non-wrestler link
+    if (!name || name.length < 2) return;
 
-          // Make sure it's an absolute URL
-          if (imageUrl && !imageUrl.startsWith("http")) {
-            imageUrl = `${WWE_BASE_URL}${imageUrl}`;
-          }
-        }
+    // Skip common non-wrestler pages
+    const skipSlugs = ["all", "index", "list", "search", "filter"];
+    if (skipSlugs.includes(slug)) return;
 
-        // Only add if we have a valid name and slug
-        if (name && slug) {
-          wrestlers.push({
-            name,
-            slug,
-            imageUrl,
-            brand,
-            source: "wwe",
-          });
-        }
-      });
+    // Extract image URL
+    let imageUrl: string | null = null;
+    const imgEl = $card.find("img").first();
+    if (imgEl.length > 0) {
+      imageUrl =
+        imgEl.attr("src") ||
+        imgEl.attr("data-src") ||
+        imgEl.attr("data-lazy-src") ||
+        null;
 
-      // If we found cards with this selector, stop trying others
-      if (wrestlers.length > 0) break;
+      // Make sure it's an absolute URL
+      if (imageUrl && !imageUrl.startsWith("http")) {
+        imageUrl = `${WWE_BASE_URL}${imageUrl}`;
+      }
+
+      // Skip placeholder/generic images
+      if (imageUrl && (imageUrl.includes("placeholder") || imageUrl.includes("default"))) {
+        imageUrl = null;
+      }
     }
-  }
+
+    seenSlugs.add(slug);
+    wrestlers.push({
+      name,
+      slug,
+      imageUrl,
+      brand,
+      source: "wwe",
+    });
+  });
 
   return wrestlers;
 }
@@ -137,6 +131,8 @@ async function scrapeMainPage(): Promise<ScrapedWrestler[]> {
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
       },
     });
 
@@ -150,6 +146,7 @@ async function scrapeMainPage(): Promise<ScrapedWrestler[]> {
 
     // Look for JSON data embedded in the page (many modern sites do this)
     const wrestlers: ScrapedWrestler[] = [];
+    const seenSlugs = new Set<string>();
 
     // Try to find script tags with wrestler data
     $("script").each((_, el) => {
@@ -160,6 +157,7 @@ async function scrapeMainPage(): Promise<ScrapedWrestler[]> {
         /__NEXT_DATA__[\s\S]*?(\{[\s\S]*\})/,
         /window\.__PRELOADED_STATE__\s*=\s*(\{[\s\S]*?\});/,
         /"superstars"\s*:\s*(\[[\s\S]*?\])/,
+        /drupalSettings\.wwe[\s\S]*?superstars[\s\S]*?(\[[\s\S]*?\])/,
       ];
 
       for (const pattern of jsonPatterns) {
@@ -175,13 +173,16 @@ async function scrapeMainPage(): Promise<ScrapedWrestler[]> {
                 for (const item of obj) {
                   if (item && typeof item === "object" && "name" in item && "slug" in item) {
                     const w = item as { name: string; slug: string; image?: { url?: string }; brand?: string };
-                    wrestlers.push({
-                      name: w.name,
-                      slug: w.slug,
-                      imageUrl: w.image?.url || null,
-                      brand: w.brand || null,
-                      source: "wwe",
-                    });
+                    if (!seenSlugs.has(w.slug)) {
+                      seenSlugs.add(w.slug);
+                      wrestlers.push({
+                        name: w.name,
+                        slug: w.slug,
+                        imageUrl: w.image?.url || null,
+                        brand: w.brand || null,
+                        source: "wwe",
+                      });
+                    }
                   }
                   extractWrestlers(item);
                 }
@@ -199,9 +200,14 @@ async function scrapeMainPage(): Promise<ScrapedWrestler[]> {
       }
     });
 
-    // Also try HTML parsing
+    // Primary method: HTML parsing with updated selectors
     const htmlWrestlers = parseWrestlerCards($, "WWE");
-    wrestlers.push(...htmlWrestlers);
+    for (const w of htmlWrestlers) {
+      if (!seenSlugs.has(w.slug)) {
+        seenSlugs.add(w.slug);
+        wrestlers.push(w);
+      }
+    }
 
     console.log(`Scraped ${wrestlers.length} wrestlers from main page`);
     return wrestlers;
