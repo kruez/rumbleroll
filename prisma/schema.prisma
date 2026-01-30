@@ -97,16 +97,44 @@ model NumberAssignment {
 }
 
 model RumbleEntry {
-  id           String    @id @default(cuid())
-  entryNumber  Int       // 1-30
-  wrestlerName String?
-  enteredAt    DateTime?
-  eliminatedAt DateTime?
-  eliminatedBy String?   // Name of wrestler who eliminated them
-  isWinner     Boolean   @default(false)
+  id               String    @id @default(cuid())
+  entryNumber      Int       // 1-30
+  wrestlerName     String?
+  wrestlerImageUrl String?   // WWE CDN URL for wrestler photo
+  enteredAt        DateTime?
+  eliminatedAt     DateTime?
+  eliminatedBy     String?   // Name of wrestler who eliminated them
+  isWinner         Boolean   @default(false)
 
-  eventId      String
-  event        RumbleEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId          String
+  event            RumbleEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@unique([eventId, entryNumber])
+}
+
+model Wrestler {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique  // "drew-mcintyre"
+  imageUrl  String?            // WWE CDN URL
+  brand     String?            // "Raw", "SmackDown", "NXT"
+  source    String             // "wwe"
+  sourceId  String?
+  isActive  Boolean  @default(true)
+  aliases   String[]           // For fuzzy matching
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+  @@index([brand])
+  @@index([isActive])
+}
+
+model ScrapeCacheMetadata {
+  id            String   @id @default(cuid())
+  source        String   @unique  // "wwe"
+  lastScrapedAt DateTime
+  totalCount    Int
+  status        String             // "success", "partial", "failed"
+  errorMessage  String?
 }

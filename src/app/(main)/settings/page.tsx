@@ -23,6 +23,30 @@ interface UserProfile {
   bio: string | null;
 }
 
+// DiceBear avatar configuration
+const AVATAR_STYLES = [
+  { id: "avataaars", label: "Cartoon" },
+  { id: "fun-emoji", label: "Emoji" },
+  { id: "bottts", label: "Robot" },
+  { id: "pixel-art", label: "Pixel" },
+] as const;
+
+const AVATAR_SEEDS = [
+  "tiger", "eagle", "storm", "blaze",
+  "frost", "shadow", "cosmic", "neon",
+];
+
+const getDiceBearUrl = (style: string, seed: string) =>
+  `https://api.dicebear.com/7.x/${style}/svg?seed=${seed}`;
+
+const parseDiceBearUrl = (url: string): { style: string; seed: string } | null => {
+  const match = url.match(/api\.dicebear\.com\/7\.x\/([^/]+)\/svg\?seed=([^&]+)/);
+  if (match) {
+    return { style: match[1], seed: match[2] };
+  }
+  return null;
+};
+
 export default function SettingsPage() {
   const router = useRouter();
   const { update } = useSession();
@@ -35,6 +59,7 @@ export default function SettingsPage() {
   const [cashAppHandle, setCashAppHandle] = useState("");
   const [profileImageUrl, setProfileImageUrl] = useState("");
   const [bio, setBio] = useState("");
+  const [selectedAvatarStyle, setSelectedAvatarStyle] = useState<string>("avataaars");
 
   useEffect(() => {
     fetchProfile();
@@ -56,6 +81,14 @@ export default function SettingsPage() {
       setCashAppHandle(data.cashAppHandle || "");
       setProfileImageUrl(data.profileImageUrl || "");
       setBio(data.bio || "");
+
+      // If user has a DiceBear URL, set the style tab to match
+      if (data.profileImageUrl) {
+        const parsed = parseDiceBearUrl(data.profileImageUrl);
+        if (parsed) {
+          setSelectedAvatarStyle(parsed.style);
+        }
+      }
     } catch (err) {
       console.error("Failed to fetch profile:", err);
       setError("Failed to load profile");
@@ -146,7 +179,7 @@ export default function SettingsPage() {
                   </AvatarFallback>
                 </Avatar>
                 <div className="text-gray-400 text-sm">
-                  Enter an image URL below to set your profile picture
+                  Choose an avatar below or enter a custom image URL
                 </div>
               </div>
 
@@ -161,8 +194,68 @@ export default function SettingsPage() {
                 />
               </div>
 
+              {/* Avatar Picker */}
+              <div className="space-y-3">
+                <Label className="text-white">Profile Avatar</Label>
+
+                {/* Style Tabs */}
+                <div className="flex gap-2">
+                  {AVATAR_STYLES.map((style) => (
+                    <button
+                      key={style.id}
+                      type="button"
+                      onClick={() => setSelectedAvatarStyle(style.id)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        selectedAvatarStyle === style.id
+                          ? "bg-purple-600 text-white"
+                          : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                      }`}
+                    >
+                      {style.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Avatar Grid */}
+                <div className="grid grid-cols-4 gap-3 p-3 bg-gray-900/50 rounded-lg">
+                  {AVATAR_SEEDS.map((seed) => {
+                    const avatarUrl = getDiceBearUrl(selectedAvatarStyle, seed);
+                    const isSelected = profileImageUrl === avatarUrl;
+
+                    return (
+                      <button
+                        key={seed}
+                        type="button"
+                        onClick={() => setProfileImageUrl(avatarUrl)}
+                        className={`relative aspect-square rounded-lg overflow-hidden transition-all ${
+                          isSelected
+                            ? "ring-2 ring-purple-500 ring-offset-2 ring-offset-gray-800"
+                            : "hover:ring-2 hover:ring-gray-500 hover:ring-offset-2 hover:ring-offset-gray-800"
+                        }`}
+                      >
+                        <img
+                          src={avatarUrl}
+                          alt={`Avatar ${seed}`}
+                          className="w-full h-full object-cover bg-gray-700"
+                        />
+                        {isSelected && (
+                          <div className="absolute inset-0 bg-purple-600/20 flex items-center justify-center">
+                            <div className="w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center">
+                              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Custom URL Input */}
               <div className="space-y-2">
-                <Label htmlFor="profileImageUrl" className="text-white">Profile Image URL</Label>
+                <Label htmlFor="profileImageUrl" className="text-white">Or Use Custom Image URL</Label>
                 <Input
                   id="profileImageUrl"
                   placeholder="https://example.com/your-image.jpg"
@@ -170,7 +263,7 @@ export default function SettingsPage() {
                   onChange={(e) => setProfileImageUrl(e.target.value)}
                   className="bg-gray-900 border-gray-600 text-white"
                 />
-                <p className="text-gray-500 text-sm">Enter a direct link to an image</p>
+                <p className="text-gray-500 text-sm">Enter a direct link to use your own image</p>
               </div>
 
               <div className="space-y-2">

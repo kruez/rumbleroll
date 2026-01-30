@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Header } from "@/components/Header";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ScoreboardDropdown } from "@/components/ScoreboardDropdown";
+import { QRCodeSVG } from "qrcode.react";
 
 interface Entry {
   id: string;
@@ -205,7 +206,7 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
               {party.isHost && party.status === "LOBBY" && (
                 <Link href={`/party/${party.id}/admin`}>
                   <Button variant="outline" className="bg-transparent border-purple-500 text-purple-500 hover:bg-purple-500/10">
-                    Manage Players
+                    Manage Party
                   </Button>
                 </Link>
               )}
@@ -386,8 +387,21 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                   <span className="text-xs text-gray-500 block mb-1">Invite Code</span>
                   <span className="text-2xl font-mono text-white tracking-widest">{party.inviteCode}</span>
                 </div>
+                {party.status === "LOBBY" && (
+                  <div className="flex justify-center mt-4">
+                    <div className="bg-white p-2 rounded-lg">
+                      <QRCodeSVG
+                        value={`${typeof window !== "undefined" ? window.location.origin : ""}/join?code=${party.inviteCode}`}
+                        size={120}
+                        level="M"
+                      />
+                    </div>
+                  </div>
+                )}
                 <p className="text-gray-400 text-sm mt-4 text-center">
-                  Share this code with friends to let them join
+                  {party.status === "LOBBY"
+                    ? "Share this code or scan the QR to join"
+                    : "Share this code with friends to let them join"}
                 </p>
               </CardContent>
             </Card>
