@@ -48,6 +48,24 @@ export async function PATCH(
     const { id } = await params;
     const { status } = await request.json();
 
+    // Get current event state to check if we're starting the event
+    const currentEvent = await prisma.rumbleEvent.findUnique({
+      where: { id },
+      select: { status: true },
+    });
+
+    // If transitioning from NOT_STARTED to IN_PROGRESS, start timers for any staged wrestlers
+    if (status === "IN_PROGRESS" && currentEvent?.status === "NOT_STARTED") {
+      await prisma.rumbleEntry.updateMany({
+        where: {
+          eventId: id,
+          wrestlerName: { not: null },
+          enteredAt: null,
+        },
+        data: { enteredAt: new Date() },
+      });
+    }
+
     const event = await prisma.rumbleEvent.update({
       where: { id },
       data: { status },

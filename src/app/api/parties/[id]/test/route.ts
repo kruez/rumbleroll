@@ -97,9 +97,25 @@ export async function POST(
                 name,
                 // Unusable password hash - test users can't log in
                 password: "$2a$10$TESTUSER.NOLOGIN.PLACEHOLDER",
+                // Add DiceBear avatar
+                profileImageUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
               },
             });
             testUser = { id: newUser.id, email: newUser.email };
+          } else {
+            // If test user exists but has no profile image, update it
+            const existingUser = await prisma.user.findUnique({
+              where: { id: testUser.id },
+              select: { profileImageUrl: true },
+            });
+            if (!existingUser?.profileImageUrl) {
+              await prisma.user.update({
+                where: { id: testUser.id },
+                data: {
+                  profileImageUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
+                },
+              });
+            }
           }
 
           // Add as participant if not already in party

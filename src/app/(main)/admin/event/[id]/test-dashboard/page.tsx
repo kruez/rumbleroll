@@ -146,7 +146,7 @@ export default function TestDashboardPage({
   }, [session, status, router, fetchData]);
 
   const handleTestAction = async (
-    action: "enter" | "fill" | "eliminate" | "reset"
+    action: "enter" | "fill" | "eliminate" | "reset" | "stage"
   ): Promise<{
     success?: boolean;
     winner?: string;
@@ -156,6 +156,7 @@ export default function TestDashboardPage({
     entryNumber?: number;
     message?: string;
     complete?: boolean;
+    staged?: boolean;
   } | null> => {
     setActionLoading(true);
     try {
@@ -171,6 +172,11 @@ export default function TestDashboardPage({
           addActivityLog(
             `${data.wrestlerName} entered at #${data.entryNumber}`,
             "entry"
+          );
+        } else if (action === "stage" && data.wrestlerName) {
+          addActivityLog(
+            `${data.wrestlerName} staged at #${data.entryNumber} (awaiting start)`,
+            "system"
           );
         } else if (action === "fill") {
           addActivityLog("All wrestlers auto-filled", "system");
@@ -279,7 +285,7 @@ export default function TestDashboardPage({
       const allEntered = enteredCount >= 30;
       const canEnter = enteredCount < 30;
       const canEliminate = allEntered
-        ? activeCount > 1  // After all entered, eliminate until 1 remains
+        ? activeCount >= 1  // After all entered, eliminate until winner declared
         : activeCount >= overlappingSimConfig.minWrestlersBeforeEliminations;
 
       // Decide action: enter or eliminate
@@ -359,6 +365,7 @@ export default function TestDashboardPage({
   }
 
   const enteredCount = event.entries.filter((e) => e.wrestlerName).length;
+  const stagedCount = event.entries.filter((e) => e.wrestlerName && !e.enteredAt).length;
   const eliminatedCount = event.entries.filter((e) => e.eliminatedAt).length;
   const activeCount = event.entries.filter(
     (e) => e.wrestlerName && !e.eliminatedAt && !e.isWinner
@@ -736,6 +743,33 @@ export default function TestDashboardPage({
                 <p className="text-gray-400 text-sm">
                   Step through the simulation manually with full control over each action.
                 </p>
+
+                {/* Pre-match staging section - only show when event hasn't started */}
+                {event.status === "NOT_STARTED" && (
+                  <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600 mb-4">
+                    <p className="text-gray-300 text-sm mb-3">
+                      <strong>Pre-Match Staging:</strong> Stage the first 2 wrestlers before starting. Their timers will begin when you click &ldquo;Start Event&rdquo;.
+                    </p>
+                    <div className="flex gap-4 items-center">
+                      <Button
+                        onClick={() => handleTestAction("stage")}
+                        disabled={
+                          actionLoading ||
+                          stagedCount >= 2
+                        }
+                        className="bg-blue-600 hover:bg-blue-700 h-12"
+                      >
+                        Stage Wrestler ({stagedCount}/2)
+                      </Button>
+                      {stagedCount > 0 && (
+                        <span className="text-blue-300 text-sm">
+                          {stagedCount === 1 ? "1 wrestler staged" : "2 wrestlers staged"} - ready to start!
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <Button
                     onClick={handleStartEvent}

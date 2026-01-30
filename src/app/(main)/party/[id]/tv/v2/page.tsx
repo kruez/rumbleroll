@@ -131,11 +131,15 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
   }, [party]);
 
   // Get participant info for a given entry number
-  const getParticipantInfoForEntry = useCallback((entryNumber: number): { id: string; name: string } | null => {
+  const getParticipantInfoForEntry = useCallback((entryNumber: number): { id: string; name: string; profileImageUrl?: string | null } | null => {
     if (!party) return null;
     for (const p of party.participants) {
       if (p.assignments.some((a) => a.entryNumber === entryNumber)) {
-        return { id: p.id, name: p.user.name || p.user.email.split("@")[0] };
+        return {
+          id: p.id,
+          name: p.user.name || p.user.email.split("@")[0],
+          profileImageUrl: p.user.profileImageUrl,
+        };
       }
     }
     return null;
@@ -668,9 +672,18 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                     <p className="text-2xl font-black text-white truncate flex-1 flex items-center">
                       {entry.wrestlerName}
                     </p>
-                    <p className="text-sm opacity-80 truncate text-white/70">
-                      {participantInfo?.name}
-                    </p>
+                    <div className="flex items-center gap-2 mt-auto">
+                      {participantInfo?.profileImageUrl && (
+                        <img
+                          src={participantInfo.profileImageUrl}
+                          alt=""
+                          className="w-6 h-6 rounded-full flex-shrink-0"
+                        />
+                      )}
+                      <p className="text-lg font-semibold truncate text-white/80">
+                        {participantInfo?.name}
+                      </p>
+                    </div>
                   </div>
                 )}
 
@@ -683,9 +696,18 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                     <p className="text-xl font-bold text-white/80 truncate">
                       {entry.wrestlerName}
                     </p>
-                    <div className="flex justify-between items-center mt-auto text-sm text-gray-400">
-                      <span className="truncate">{participantInfo?.name}</span>
-                      <span className="font-mono">
+                    <div className="flex justify-between items-center mt-auto">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {participantInfo?.profileImageUrl && (
+                          <img
+                            src={participantInfo.profileImageUrl}
+                            alt=""
+                            className="w-5 h-5 rounded-full flex-shrink-0 opacity-70"
+                          />
+                        )}
+                        <span className="text-base text-gray-300 truncate">{participantInfo?.name}</span>
+                      </div>
+                      <span className="font-mono text-sm text-gray-400 flex-shrink-0 ml-2">
                         {formatDuration(entry.enteredAt, entry.eliminatedAt)}
                       </span>
                     </div>

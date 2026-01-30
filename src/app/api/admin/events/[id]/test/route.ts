@@ -187,6 +187,37 @@ export async function POST(
         });
       }
 
+      case "stage": {
+        // Stage the next wrestler without starting match or timer
+        // Used for pre-match staging of first 2 entrants
+        const nextEmptyEntry = event.entries
+          .sort((a, b) => a.entryNumber - b.entryNumber)
+          .find((e) => !e.wrestlerName);
+
+        if (!nextEmptyEntry) {
+          return NextResponse.json({
+            error: "All wrestlers have been staged/entered",
+            complete: true,
+          }, { status: 400 });
+        }
+
+        const wrestlerName = WRESTLER_NAMES[Math.floor(Math.random() * WRESTLER_NAMES.length)];
+
+        // Set wrestler name but NOT enteredAt (timer doesn't start yet)
+        const updatedEntry = await prisma.rumbleEntry.update({
+          where: { id: nextEmptyEntry.id },
+          data: { wrestlerName },
+        });
+
+        return NextResponse.json({
+          success: true,
+          entryNumber: updatedEntry.entryNumber,
+          wrestlerName: updatedEntry.wrestlerName,
+          staged: true,
+          message: `${wrestlerName} staged at #${updatedEntry.entryNumber}`,
+        });
+      }
+
       default:
         return NextResponse.json({
           error: "Invalid action. Use: enter, fill, eliminate, or reset",
