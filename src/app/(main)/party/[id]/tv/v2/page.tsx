@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, use, useCallback, useRef, useMemo } from "react";
+import { QRCodeSVG } from "qrcode.react";
 
 const PLAYER_COLORS = [
   // Primary bright colors (10)
@@ -83,7 +84,14 @@ interface ReplayEvent {
   timestamp: number;
 }
 
-type CelebrationNameStatus = "entering" | "active" | "eliminating" | "eliminated";
+type CelebrationNameStatus =
+  | "entering"
+  | "active"
+  | "pending_elimination"  // Waiting for collision to trigger elimination
+  | "eliminating"          // Shake/explode sequence
+  | "eliminated";
+
+type EliminationPhase = "red" | "shake" | "explode";
 
 interface FloatingName {
   id: string;
@@ -97,8 +105,10 @@ interface FloatingName {
   width: number;              // element width for collision
   height: number;             // element height for collision
   status: CelebrationNameStatus;
-  scale: number;              // for enter animation (1.5 -> 1.0)
-  opacity: number;            // for fade effect (1.0 -> 0.85)
+  scale: number;              // for enter animation (4.0 -> 1.0)
+  opacity: number;            // for fade effect (0.3 -> 0.7)
+  eliminatedBy?: string;      // Track who eliminated them
+  eliminationPhase?: EliminationPhase; // Current phase of elimination animation
 }
 
 export default function TVDisplayV2Page({ params }: { params: Promise<{ id: string }> }) {
@@ -333,9 +343,9 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
     };
   }, []);
 
-  // Generate random velocity
+  // Generate random velocity - calm, slow drifting
   const generateRandomVelocity = useCallback((): { vx: number; vy: number } => {
-    const speed = 1.5 + Math.random() * 1.5; // 1.5-3 px/frame
+    const speed = 0.3 + Math.random() * 0.3; // 0.3-0.6 px/frame (much slower, calm float)
     const angle = Math.random() * Math.PI * 2;
     return {
       vx: Math.cos(angle) * speed,
@@ -419,24 +429,24 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
     }
   }, [party, showCelebrationReplay, buildReplayTimeline]);
 
-  // Process celebration replay events with faster timing
+  // Process celebration replay events with calm, dramatic timing
   useEffect(() => {
     if (!showCelebrationReplay || celebrationTimeline.length === 0) return;
 
     const processNextEvent = () => {
       if (celebrationReplayIndex >= celebrationTimeline.length) {
-        // Replay complete, restart after 3 seconds
+        // Replay complete, restart after 5 seconds
         celebrationTimeoutRef.current = setTimeout(() => {
           setCelebrationReplayIndex(0);
           setFloatingNames([]);
           floatingNamesRef.current = [];
-        }, 3000);
+        }, 5000);
         return;
       }
 
       const event = celebrationTimeline[celebrationReplayIndex];
-      // Faster timing: entry=300ms, elimination=400ms, winner=1000ms
-      const delay = event.type === "entry" ? 300 : event.type === "elimination" ? 400 : 1000;
+      // Calm timing: entry=3000ms, elimination=3000ms, winner=2000ms
+      const delay = event.type === "entry" ? 3000 : event.type === "elimination" ? 3000 : 2000;
 
       if (event.type === "entry" && event.entry.wrestlerName) {
         const container = celebrationContainerRef.current;
@@ -447,26 +457,24 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
         const estimatedWidth = 250;
         const estimatedHeight = 50;
 
-        const position = generateInitialPosition(containerWidth, containerHeight, estimatedWidth, estimatedHeight);
-        const velocity = generateRandomVelocity();
-
         // Calculate duration for this entry
         const entryDuration = formatDuration(event.entry.enteredAt, event.entry.eliminatedAt);
 
+        // Start from center of screen, zooming in from far away
         const newName: FloatingName = {
           id: event.entry.id,
           entryNumber: event.entry.entryNumber,
           wrestlerName: event.entry.wrestlerName!,
           duration: entryDuration,
-          x: position.x,
-          y: position.y,
-          vx: velocity.vx,
-          vy: velocity.vy,
+          x: containerWidth / 2 - estimatedWidth / 2,
+          y: containerHeight / 2 - estimatedHeight / 2,
+          vx: 0, // Start stationary
+          vy: 0,
           width: estimatedWidth,
           height: estimatedHeight,
           status: "entering",
-          scale: 1.5,
-          opacity: 1.0,
+          scale: 4.0, // Start large (zooming in from far away)
+          opacity: 0.3, // Start translucent/ghostly
         };
 
         // Add new floating name in "entering" state
@@ -476,38 +484,30 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
           return updated;
         });
 
-        // Transition to "active" after 500ms with shrink animation
+        // Transition to "active" after 1.5s with zoom animation
         setTimeout(() => {
+          const velocity = generateRandomVelocity();
           setFloatingNames((prev) => {
             const updated = prev.map((n) =>
               n.id === event.entry.id && n.status === "entering"
-                ? { ...n, status: "active" as CelebrationNameStatus, scale: 1.0, opacity: 0.85 }
+                ? { ...n, status: "active" as CelebrationNameStatus, scale: 1.0, opacity: 0.7, vx: velocity.vx, vy: velocity.vy }
                 : n
             );
             floatingNamesRef.current = updated;
             return updated;
           });
-        }, 500);
+        }, 1500);
       } else if (event.type === "elimination" && event.entry.wrestlerName) {
-        // Set the eliminated wrestler to "eliminating" state
+        // Mark as "pending_elimination" - wait for collision to trigger visual effect
         setFloatingNames((prev) => {
           const updated = prev.map((n) =>
-            n.id === event.entry.id ? { ...n, status: "eliminating" as CelebrationNameStatus, scale: 0, opacity: 0 } : n
+            n.id === event.entry.id && n.status === "active"
+              ? { ...n, status: "pending_elimination" as CelebrationNameStatus, eliminatedBy: event.entry.eliminatedBy || undefined }
+              : n
           );
           floatingNamesRef.current = updated;
           return updated;
         });
-
-        // Transition to "eliminated" (remove from physics) after 300ms
-        setTimeout(() => {
-          setFloatingNames((prev) => {
-            const updated = prev.map((n) =>
-              n.id === event.entry.id ? { ...n, status: "eliminated" as CelebrationNameStatus } : n
-            );
-            floatingNamesRef.current = updated;
-            return updated;
-          });
-        }, 300);
       }
 
       celebrationTimeoutRef.current = setTimeout(() => {
@@ -522,7 +522,60 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
         clearTimeout(celebrationTimeoutRef.current);
       }
     };
-  }, [showCelebrationReplay, celebrationReplayIndex, celebrationTimeline, generateInitialPosition, generateRandomVelocity, formatDuration]);
+  }, [showCelebrationReplay, celebrationReplayIndex, celebrationTimeline, generateRandomVelocity, formatDuration]);
+
+  // Trigger elimination animation sequence with phased updates
+  const triggerEliminationAnimation = useCallback((name: FloatingName) => {
+    const nameId = name.id;
+    name.status = "eliminating";
+    name.eliminationPhase = "red";
+
+    // Phase 1: Turn red (immediate)
+    setFloatingNames((prev) => {
+      const updated = prev.map((n) =>
+        n.id === nameId ? { ...n, status: "eliminating" as CelebrationNameStatus, eliminationPhase: "red" as EliminationPhase } : n
+      );
+      floatingNamesRef.current = updated;
+      return updated;
+    });
+
+    // Phase 2: Start shake (after 200ms)
+    setTimeout(() => {
+      setFloatingNames((prev) => {
+        const updated = prev.map((n) =>
+          n.id === nameId && n.status === "eliminating"
+            ? { ...n, eliminationPhase: "shake" as EliminationPhase }
+            : n
+        );
+        floatingNamesRef.current = updated;
+        return updated;
+      });
+    }, 200);
+
+    // Phase 3: Start explode (after 600ms)
+    setTimeout(() => {
+      setFloatingNames((prev) => {
+        const updated = prev.map((n) =>
+          n.id === nameId && n.status === "eliminating"
+            ? { ...n, eliminationPhase: "explode" as EliminationPhase }
+            : n
+        );
+        floatingNamesRef.current = updated;
+        return updated;
+      });
+    }, 600);
+
+    // Phase 4: Set to eliminated (after 900ms)
+    setTimeout(() => {
+      setFloatingNames((prev) => {
+        const updated = prev.map((n) =>
+          n.id === nameId ? { ...n, status: "eliminated" as CelebrationNameStatus } : n
+        );
+        floatingNamesRef.current = updated;
+        return updated;
+      });
+    }, 900);
+  }, []);
 
   // Physics animation loop for bouncing names
   useEffect(() => {
@@ -544,7 +597,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
         // Create mutable copies for physics updates
         const next = prev.map((name) => ({ ...name }));
 
-        // Update positions for active names
+        // Update positions for active and pending_elimination names
         for (const name of next) {
           if (name.status === "eliminated" || name.status === "eliminating") continue;
 
@@ -554,21 +607,32 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
 
           // Wall bounce with margin
           const margin = 10;
+          let hitWall = false;
+
           if (name.x < margin) {
             name.x = margin;
             name.vx = Math.abs(name.vx);
+            hitWall = true;
           }
           if (name.x + name.width > width - margin) {
             name.x = width - name.width - margin;
             name.vx = -Math.abs(name.vx);
+            hitWall = true;
           }
           if (name.y < margin) {
             name.y = margin;
             name.vy = Math.abs(name.vy);
+            hitWall = true;
           }
           if (name.y + name.height > height - margin) {
             name.y = height - name.height - margin;
             name.vy = -Math.abs(name.vy);
+            hitWall = true;
+          }
+
+          // Wall collision triggers elimination for pending_elimination
+          if (hitWall && name.status === "pending_elimination") {
+            triggerEliminationAnimation(name);
           }
         }
 
@@ -580,7 +644,21 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
             if (a.status !== "eliminated" && a.status !== "eliminating" &&
                 b.status !== "eliminated" && b.status !== "eliminating") {
               if (checkCollision(a, b)) {
-                resolveCollision(a, b);
+                // Check if either is pending_elimination - trigger their elimination on collision
+                const aWasPending = a.status === "pending_elimination";
+                const bWasPending = b.status === "pending_elimination";
+
+                if (aWasPending) {
+                  triggerEliminationAnimation(a);
+                }
+                if (bWasPending) {
+                  triggerEliminationAnimation(b);
+                }
+
+                // Still resolve collision physics if neither was pending elimination
+                if (!aWasPending && !bWasPending) {
+                  resolveCollision(a, b);
+                }
               }
             }
           }
@@ -600,7 +678,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [showCelebrationReplay, checkCollision, resolveCollision]);
+  }, [showCelebrationReplay, checkCollision, resolveCollision, triggerEliminationAnimation]);
 
   // Measure floating name elements after render to get accurate sizes
   useEffect(() => {
@@ -748,11 +826,62 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
               ref={celebrationContainerRef}
               className="absolute inset-0 pointer-events-none overflow-hidden z-20"
             >
+              <style>{`
+                @keyframes wrestlerShake {
+                  0%, 100% { transform: translateX(0) rotate(0); }
+                  10% { transform: translateX(-3px) rotate(-2deg); }
+                  20% { transform: translateX(3px) rotate(2deg); }
+                  30% { transform: translateX(-3px) rotate(-2deg); }
+                  40% { transform: translateX(3px) rotate(2deg); }
+                  50% { transform: translateX(-3px) rotate(-1deg); }
+                  60% { transform: translateX(3px) rotate(1deg); }
+                  70% { transform: translateX(-2px) rotate(-1deg); }
+                  80% { transform: translateX(2px) rotate(1deg); }
+                  90% { transform: translateX(-1px) rotate(0); }
+                }
+                @keyframes wrestlerExplode {
+                  0% { transform: scale(1); opacity: 0.7; }
+                  30% { transform: scale(1.3); opacity: 0.9; }
+                  100% { transform: scale(0.1); opacity: 0; }
+                }
+              `}</style>
               {floatingNames.map((name) => {
                 if (name.status === "eliminated") return null;
 
                 // Find the winner to give special treatment
                 const isWinner = winner?.id === name.id;
+                const isEliminating = name.status === "eliminating";
+                const isPendingElimination = name.status === "pending_elimination";
+
+                // Determine styling based on elimination phase
+                let animationStyle: React.CSSProperties = {};
+                let textColorClass = "text-white";
+                let containerAnimation = "";
+
+                if (isEliminating && name.eliminationPhase) {
+                  textColorClass = "text-red-500"; // Red throughout elimination
+
+                  switch (name.eliminationPhase) {
+                    case "red":
+                      // Phase 1: Just red text, no animation yet
+                      break;
+                    case "shake":
+                      // Phase 2: Shake animation
+                      containerAnimation = "wrestlerShake 0.4s ease-in-out";
+                      break;
+                    case "explode":
+                      // Phase 3: Explode animation
+                      animationStyle = {
+                        animation: "wrestlerExplode 0.3s ease-out forwards",
+                      };
+                      break;
+                  }
+                }
+
+                // Pending elimination names slightly pulse/glow to hint they're doomed
+                if (isPendingElimination) {
+                  textColorClass = "text-orange-300";
+                }
 
                 return (
                   <div
@@ -768,19 +897,21 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                       top: `${name.y}px`,
                       transform: `scale(${name.scale})`,
                       opacity: name.opacity,
-                      transition: name.status === "entering" || name.status === "eliminating"
-                        ? "transform 0.5s ease-out, opacity 0.3s ease-out"
+                      transition: name.status === "entering"
+                        ? "transform 1.5s ease-out, opacity 1.5s ease-out"
                         : "none",
+                      animation: containerAnimation || undefined,
+                      ...animationStyle,
                     }}
                   >
                     <span
-                      className={`font-bold ${isWinner ? "text-yellow-300" : "text-yellow-400"}`}
+                      className={`font-bold ${isWinner ? "text-yellow-300" : isEliminating || isPendingElimination ? textColorClass : "text-yellow-400"}`}
                       style={{ fontSize: `${20 * name.scale}px` }}
                     >
                       #{name.entryNumber}
                     </span>
                     <span
-                      className="text-white font-black"
+                      className={`font-black ${textColorClass}`}
                       style={{ fontSize: `${28 * name.scale}px` }}
                     >
                       {name.wrestlerName}
@@ -808,24 +939,61 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
       )}
 
       {party.status === "LOBBY" ? (
-        // Lobby view - show entry grid with player assignments but all pending
-        <div className="flex-1 flex flex-col">
-          <div className="text-center mb-4">
-            <p className="text-xl text-gray-400">Waiting for numbers to be assigned...</p>
+        // Lobby view - show invite code and QR prominently
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <div className="text-center mb-8">
+            <p className="text-2xl text-gray-400 mb-2">Waiting for players to join...</p>
+            <p className="text-lg text-purple-400">{party.participants.length} player{party.participants.length !== 1 ? "s" : ""} joined</p>
           </div>
-          <div className="flex-1 grid grid-cols-6 gap-2 auto-rows-fr">
-            {Array.from({ length: 30 }, (_, i) => i + 1).map((num) => {
-              return (
-                <div
-                  key={num}
-                  className="bg-gray-700/30 border border-gray-600 rounded-lg p-2 flex flex-col items-center justify-center opacity-50"
-                >
-                  <span className="text-3xl font-bold text-gray-400">{num}</span>
-                  <span className="text-xs text-gray-500 mt-1">WAITING</span>
-                </div>
-              );
-            })}
+
+          <div className="flex flex-col md:flex-row items-center gap-8 md:gap-16">
+            {/* Invite Code */}
+            <div className="text-center">
+              <p className="text-gray-400 text-lg mb-2">Join Code</p>
+              <div className="bg-gray-800/80 border-2 border-purple-500 rounded-xl px-8 py-6">
+                <span className="text-6xl md:text-7xl font-mono font-bold text-white tracking-[0.3em]">
+                  {party.inviteCode}
+                </span>
+              </div>
+            </div>
+
+            {/* QR Code */}
+            <div className="text-center">
+              <p className="text-gray-400 text-lg mb-2">Scan to Join</p>
+              <div className="bg-white p-4 rounded-xl">
+                <QRCodeSVG
+                  value={`${typeof window !== "undefined" ? window.location.origin : ""}/join?code=${party.inviteCode}`}
+                  size={200}
+                  level="M"
+                />
+              </div>
+            </div>
           </div>
+
+          {/* Player list */}
+          {party.participants.length > 0 && (
+            <div className="mt-12 w-full max-w-4xl">
+              <div className="flex flex-wrap justify-center gap-4">
+                {party.participants.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-2 bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-2"
+                  >
+                    {p.user.profileImageUrl && (
+                      <img
+                        src={p.user.profileImageUrl}
+                        alt=""
+                        className="w-8 h-8 rounded-full"
+                      />
+                    )}
+                    <span className="text-white text-lg font-medium">
+                      {p.user.name || p.user.email.split("@")[0]}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         // Active game view - 6x5 grid of expanded entry cards
