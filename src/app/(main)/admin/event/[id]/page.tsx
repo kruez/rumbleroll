@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { WrestlerAutocomplete } from "@/components/ui/wrestler-autocomplete";
 import { Header } from "@/components/Header";
 import {
   Dialog,
@@ -22,6 +23,7 @@ interface RumbleEntry {
   id: string;
   entryNumber: number;
   wrestlerName: string | null;
+  wrestlerImageUrl: string | null;
   enteredAt: string | null;
   eliminatedAt: string | null;
   eliminatedBy: string | null;
@@ -46,6 +48,7 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
   const [loading, setLoading] = useState(true);
   const [editingEntry, setEditingEntry] = useState<number | null>(null);
   const [wrestlerInput, setWrestlerInput] = useState("");
+  const [wrestlerImageUrl, setWrestlerImageUrl] = useState<string | null>(null);
   const [eliminatedByInput, setEliminatedByInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -101,11 +104,16 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
       const res = await fetch(`/api/admin/events/${id}/entries`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entryNumber, wrestlerName: wrestlerInput }),
+        body: JSON.stringify({
+          entryNumber,
+          wrestlerName: wrestlerInput,
+          wrestlerImageUrl: wrestlerImageUrl,
+        }),
       });
       if (res.ok) {
         setEditingEntry(null);
         setWrestlerInput("");
+        setWrestlerImageUrl(null);
         fetchEvent();
       }
     } catch (error) {
@@ -397,20 +405,18 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
             </CardHeader>
             <CardContent>
               <div className="flex gap-4">
-                <Input
-                  placeholder="Wrestler name..."
-                  value={editingEntry === nextEntry.entryNumber ? wrestlerInput : ""}
-                  onChange={(e) => {
-                    setEditingEntry(nextEntry.entryNumber);
-                    setWrestlerInput(e.target.value);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      handleSetWrestler(nextEntry.entryNumber);
-                    }
-                  }}
-                  className="bg-gray-900 border-gray-600 text-white flex-1"
-                />
+                <div className="flex-1">
+                  <WrestlerAutocomplete
+                    value={editingEntry === nextEntry.entryNumber ? wrestlerInput : ""}
+                    onChange={(value, imageUrl) => {
+                      setEditingEntry(nextEntry.entryNumber);
+                      setWrestlerInput(value);
+                      setWrestlerImageUrl(imageUrl ?? null);
+                    }}
+                    placeholder="Search wrestlers..."
+                    autoFocus
+                  />
+                </div>
                 <Button
                   onClick={() => handleSetWrestler(nextEntry.entryNumber)}
                   disabled={saving || !wrestlerInput.trim()}
@@ -423,12 +429,53 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
           </Card>
         )}
 
-        {/* Message when event not started */}
+        {/* Pre-stage first 2 wrestlers when not started */}
         {event.status === "NOT_STARTED" && (
           <Card className="bg-blue-900/30 border-blue-500 mb-8">
-            <CardContent className="py-6 text-center">
-              <p className="text-blue-300 text-lg">Start the event before adding wrestlers</p>
-              <p className="text-gray-400 text-sm mt-2">Click the "Start Event" button above to begin</p>
+            <CardHeader>
+              <CardTitle className="text-white">Pre-Stage Starting Wrestlers</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-blue-300 text-sm mb-4">
+                Set the first 2 wrestlers before starting the event. Their timers will begin when you click &quot;Start Event&quot;.
+              </p>
+              <div className="space-y-4">
+                {[1, 2].map((num) => {
+                  const entry = event.entries.find((e) => e.entryNumber === num);
+                  return (
+                    <div key={num} className="flex items-center gap-4">
+                      <span className="text-white font-bold w-8">#{num}</span>
+                      {entry?.wrestlerName ? (
+                        <div className="flex items-center gap-2 flex-1">
+                          <span className="text-green-400">{entry.wrestlerName}</span>
+                          <Badge className="bg-blue-600">Staged</Badge>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2 flex-1">
+                          <div className="flex-1">
+                            <WrestlerAutocomplete
+                              value={editingEntry === num ? wrestlerInput : ""}
+                              onChange={(value, imageUrl) => {
+                                setEditingEntry(num);
+                                setWrestlerInput(value);
+                                setWrestlerImageUrl(imageUrl ?? null);
+                              }}
+                              placeholder="Search wrestlers..."
+                            />
+                          </div>
+                          <Button
+                            onClick={() => handleSetWrestler(num)}
+                            disabled={saving || editingEntry !== num || !wrestlerInput.trim()}
+                            className="bg-blue-600 hover:bg-blue-700"
+                          >
+                            Stage
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </CardContent>
           </Card>
         )}
@@ -475,39 +522,47 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
                   </div>
                   <div className="flex gap-2">
                     {!entry.wrestlerName ? (
-                      event.status === "IN_PROGRESS" ? (
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="Wrestler name..."
-                            value={editingEntry === entry.entryNumber ? wrestlerInput : ""}
-                            onChange={(e) => {
-                              setEditingEntry(entry.entryNumber);
-                              setWrestlerInput(e.target.value);
-                            }}
-                            className="bg-gray-900 border-gray-600 text-white w-40"
-                          />
+                      event.status === "IN_PROGRESS" ||
+                      (event.status === "NOT_STARTED" && entry.entryNumber <= 2) ? (
+                        <div className="flex gap-2 items-center">
+                          <div className="w-48">
+                            <WrestlerAutocomplete
+                              value={editingEntry === entry.entryNumber ? wrestlerInput : ""}
+                              onChange={(value, imageUrl) => {
+                                setEditingEntry(entry.entryNumber);
+                                setWrestlerInput(value);
+                                setWrestlerImageUrl(imageUrl ?? null);
+                              }}
+                              placeholder="Search wrestlers..."
+                            />
+                          </div>
                           <Button
                             size="sm"
                             onClick={() => handleSetWrestler(entry.entryNumber)}
-                            disabled={saving || editingEntry !== entry.entryNumber}
+                            disabled={saving || editingEntry !== entry.entryNumber || !wrestlerInput.trim()}
                           >
-                            Set
+                            {event.status === "NOT_STARTED" ? "Stage" : "Set"}
                           </Button>
                         </div>
                       ) : (
-                        <span className="text-gray-500 text-sm">Start event to add wrestlers</span>
+                        <span className="text-gray-500 text-sm">
+                          {event.status === "NOT_STARTED"
+                            ? "Start event to add wrestlers"
+                            : "Waiting..."}
+                        </span>
                       )
                     ) : !entry.eliminatedAt && !entry.isWinner ? (
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="Eliminated by... (optional)"
-                          value={editingEntry === entry.entryNumber ? eliminatedByInput : ""}
-                          onChange={(e) => {
-                            setEditingEntry(entry.entryNumber);
-                            setEliminatedByInput(e.target.value);
-                          }}
-                          className="bg-gray-900 border-gray-600 text-white w-40"
-                        />
+                      <div className="flex gap-2 items-center">
+                        <div className="w-48">
+                          <WrestlerAutocomplete
+                            value={editingEntry === entry.entryNumber ? eliminatedByInput : ""}
+                            onChange={(value) => {
+                              setEditingEntry(entry.entryNumber);
+                              setEliminatedByInput(value);
+                            }}
+                            placeholder="Eliminated by... (optional)"
+                          />
+                        </div>
                         <Button
                           size="sm"
                           variant="destructive"

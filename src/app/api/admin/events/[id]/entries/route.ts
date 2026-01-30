@@ -14,7 +14,7 @@ export async function PATCH(
     }
 
     const { id: eventId } = await params;
-    const { entryNumber, wrestlerName, eliminatedBy, isWinner } = await request.json();
+    const { entryNumber, wrestlerName, wrestlerImageUrl, eliminatedBy, isWinner } = await request.json();
 
     if (!entryNumber || entryNumber < 1 || entryNumber > 30) {
       return NextResponse.json({ error: "Invalid entry number" }, { status: 400 });
@@ -37,6 +37,7 @@ export async function PATCH(
     // Build update data
     const updateData: {
       wrestlerName?: string;
+      wrestlerImageUrl?: string | null;
       enteredAt?: Date;
       eliminatedBy?: string | null;
       eliminatedAt?: Date | null;
@@ -44,11 +45,25 @@ export async function PATCH(
     } = {};
 
     // If setting wrestler name for the first time, set enteredAt
+    // Only set enteredAt if event is IN_PROGRESS (not for pre-staging)
     if (wrestlerName !== undefined) {
       updateData.wrestlerName = wrestlerName;
+
       if (wrestlerName && !entry.enteredAt) {
-        updateData.enteredAt = new Date();
+        const event = await prisma.rumbleEvent.findUnique({
+          where: { id: eventId },
+          select: { status: true },
+        });
+
+        if (event?.status === "IN_PROGRESS") {
+          updateData.enteredAt = new Date();
+        }
       }
+    }
+
+    // Set wrestler image URL if provided
+    if (wrestlerImageUrl !== undefined) {
+      updateData.wrestlerImageUrl = wrestlerImageUrl;
     }
 
     // If marking as eliminated
