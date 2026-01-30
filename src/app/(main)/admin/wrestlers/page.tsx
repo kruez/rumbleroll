@@ -30,6 +30,9 @@ export default function WrestlerManagementPage() {
   const [newWrestlerImage, setNewWrestlerImage] = useState("");
   const [adding, setAdding] = useState(false);
   const [addResult, setAddResult] = useState<{ success: boolean; error?: string } | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Array<{ id: string; name: string; imageUrl: string | null; brand: string | null; source: string }>>([]);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -73,6 +76,26 @@ export default function WrestlerManagementPage() {
       setScrapeResult({ success: false, totalCount: 0, errorMessage: "Request failed" });
     } finally {
       setScraping(false);
+    }
+  };
+
+  const handleSearch = async (query: string) => {
+    setSearchQuery(query);
+    if (query.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/wrestlers/search?q=${encodeURIComponent(query)}&limit=20`);
+      if (res.ok) {
+        const data = await res.json();
+        setSearchResults(data.wrestlers || []);
+      }
+    } catch (error) {
+      console.error("Search failed:", error);
+    } finally {
+      setSearching(false);
     }
   };
 
@@ -238,6 +261,51 @@ export default function WrestlerManagementPage() {
                   </p>
                 )}
               </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Search Wrestlers Card */}
+        <Card className="bg-gray-800/50 border-gray-700 mb-8">
+          <CardHeader>
+            <CardTitle className="text-white">Search Wrestlers</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Label htmlFor="searchWrestler" className="text-white">Search by name</Label>
+              <Input
+                id="searchWrestler"
+                placeholder="Type to search..."
+                value={searchQuery}
+                onChange={(e) => handleSearch(e.target.value)}
+                className="bg-gray-700 border-gray-600 text-white"
+              />
+            </div>
+            {searching && <p className="text-gray-400 text-sm mt-2">Searching...</p>}
+            {searchResults.length > 0 && (
+              <div className="mt-4 max-h-64 overflow-y-auto">
+                <div className="space-y-2">
+                  {searchResults.map((w) => (
+                    <div key={w.id} className="flex items-center gap-3 p-2 rounded bg-gray-700/50">
+                      {w.imageUrl ? (
+                        <img src={w.imageUrl} alt={w.name} className="w-10 h-10 rounded object-cover" />
+                      ) : (
+                        <div className="w-10 h-10 rounded bg-gray-600 flex items-center justify-center text-gray-400 text-xs">?</div>
+                      )}
+                      <div className="flex-1">
+                        <p className="text-white font-medium">{w.name}</p>
+                        <p className="text-gray-400 text-xs">
+                          {w.brand && <span className="mr-2">{w.brand}</span>}
+                          <span className="text-gray-500">({w.source})</span>
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {searchQuery.length >= 2 && !searching && searchResults.length === 0 && (
+              <p className="text-gray-400 text-sm mt-4">No wrestlers found matching &quot;{searchQuery}&quot;</p>
             )}
           </CardContent>
         </Card>
