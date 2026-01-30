@@ -686,7 +686,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                         {formatDuration(entry.enteredAt, null)}
                       </span>
                     </div>
-                    <p className="text-2xl font-black text-white truncate flex-1 flex items-center">
+                    <p className="text-2xl font-black text-white leading-tight flex-1 flex items-center">
                       {entry.wrestlerName}
                     </p>
                     <div className="flex items-center gap-2 mt-auto">
@@ -710,7 +710,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                     <span className="inline-block bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded mb-1 self-start">
                       ELIMINATED
                     </span>
-                    <p className="text-xl font-bold text-white/80 truncate">
+                    <p className="text-xl font-bold text-white/80 leading-tight">
                       {entry.wrestlerName}
                     </p>
                     <div className="flex justify-between items-center mt-auto">
@@ -738,7 +738,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                       <span className="text-lg font-bold text-yellow-300">{num}</span>
                       <span className="text-yellow-400 text-2xl">👑</span>
                     </div>
-                    <p className="text-2xl font-black text-white truncate flex-1 flex items-center">
+                    <p className="text-2xl font-black text-white leading-tight flex-1 flex items-center">
                       {entry.wrestlerName}
                     </p>
                     <div className="flex items-center gap-2">
@@ -762,7 +762,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-lg font-bold text-white">{num}</span>
                     </div>
-                    <p className="text-xl font-bold text-white/70 truncate">
+                    <p className="text-xl font-bold text-white/70 leading-tight">
                       {entry.wrestlerName}
                     </p>
                     <div className="flex items-center gap-2 mt-auto">
