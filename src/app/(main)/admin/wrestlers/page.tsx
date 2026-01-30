@@ -55,7 +55,7 @@ export default function WrestlerManagementPage() {
       const res = await fetch("/api/admin/wrestlers/scrape", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: "wwe", force }),
+        body: JSON.stringify({ source: "smackdownhotel", force }),
       });
       const data = await res.json();
       setScrapeResult(data);
