@@ -123,7 +123,8 @@ export default function SettingsPage() {
       }
 
       // Refresh the session to update header with new profile data
-      await update();
+      await update({ profileImageUrl });
+      router.refresh();
       toast.success("Profile saved successfully");
     } catch {
       setError("Something went wrong");

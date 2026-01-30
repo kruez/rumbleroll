@@ -55,6 +55,7 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
   const [endEventDialogOpen, setEndEventDialogOpen] = useState(false);
   const [endEventConfirmDialogOpen, setEndEventConfirmDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [forceDeleteDialogOpen, setForceDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
@@ -184,10 +185,11 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
     handleUpdateStatus("COMPLETED");
   };
 
-  const handleDeleteEvent = async () => {
+  const handleDeleteEvent = async (force = false) => {
     setDeleting(true);
     try {
-      const res = await fetch(`/api/admin/events/${id}`, {
+      const url = force ? `/api/admin/events/${id}?force=true` : `/api/admin/events/${id}`;
+      const res = await fetch(url, {
         method: "DELETE",
       });
       if (res.ok) {
@@ -201,6 +203,7 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
     } finally {
       setDeleting(false);
       setDeleteDialogOpen(false);
+      setForceDeleteDialogOpen(false);
     }
   };
 
@@ -319,6 +322,18 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
               >
                 Delete Event
               </Button>
+
+              {/* Force Delete Button - shown when normal delete is disabled */}
+              {!event.isTest && event._count.parties > 0 && (
+                <Button
+                  variant="destructive"
+                  onClick={() => setForceDeleteDialogOpen(true)}
+                  className="bg-red-700 hover:bg-red-800"
+                  title="Force delete event and all associated parties"
+                >
+                  Force Delete
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -667,10 +682,41 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
             </Button>
             <Button
               variant="destructive"
-              onClick={handleDeleteEvent}
+              onClick={() => handleDeleteEvent(false)}
               disabled={deleting}
             >
               {deleting ? "Deleting..." : "Delete Event"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Force Delete Confirmation Dialog */}
+      <Dialog open={forceDeleteDialogOpen} onOpenChange={setForceDeleteDialogOpen}>
+        <DialogContent className="bg-gray-800 border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-red-400">Force Delete Event?</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              This will delete &quot;{event.name}&quot; and <span className="text-red-400 font-semibold">{event._count.parties} {event._count.parties === 1 ? "party" : "parties"}</span> with all their data (participants, entries, etc.).
+              <br /><br />
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setForceDeleteDialogOpen(false)}
+              className="bg-transparent border-gray-500 text-gray-300 hover:bg-gray-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => handleDeleteEvent(true)}
+              disabled={deleting}
+              className="bg-red-700 hover:bg-red-800"
+            >
+              {deleting ? "Deleting..." : "Force Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

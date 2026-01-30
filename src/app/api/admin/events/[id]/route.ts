@@ -93,6 +93,8 @@ export async function DELETE(
     }
 
     const { id } = await params;
+    const { searchParams } = new URL(request.url);
+    const force = searchParams.get("force") === "true";
 
     // Check if any parties are using this event
     const partiesCount = await prisma.party.count({
@@ -106,12 +108,12 @@ export async function DELETE(
         select: { isTest: true },
       });
 
-      if (event?.isTest) {
-        // For test events, cascade delete all associated parties
+      if (event?.isTest || force) {
+        // For test events or force delete, cascade delete all associated parties
         await prisma.party.deleteMany({ where: { eventId: id } });
       } else {
         return NextResponse.json(
-          { error: "Cannot delete event with active parties" },
+          { error: "Cannot delete event with active parties. Use force=true to override.", partiesCount },
           { status: 400 }
         );
       }
