@@ -17,9 +17,13 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 /**
  * Parse wrestler data from WWE superstar page HTML
  * WWE.com structure (as of 2025):
- * <a href="/superstars/drew-mcintyre">
- *   <img src="..." alt="Drew McIntyre">
- *   <h3>Drew McIntyre</h3>
+ * <a href="/superstars/drew-mcintyre" class="talent-link">
+ *   <picture>
+ *     <img alt="WWE Photo" title="Drew McIntyre" src="...">
+ *   </picture>
+ *   <div class="content__on__image">
+ *     <h1>Drew McIntyre</h1>
+ *   </div>
  * </a>
  */
 function parseWrestlerCards($: cheerio.CheerioAPI, brand: string): ScrapedWrestler[] {
@@ -40,21 +44,26 @@ function parseWrestlerCards($: cheerio.CheerioAPI, brand: string): ScrapedWrestl
     // Skip if we've already seen this wrestler (avoid duplicates from multiple links)
     if (seenSlugs.has(slug)) return;
 
-    // Extract name - try multiple sources
+    // Skip common non-wrestler pages
+    const skipSlugs = ["all", "index", "list", "search", "filter", "vacant"];
+    if (skipSlugs.includes(slug)) return;
+
+    // Extract name - try multiple sources in order of reliability
+    // 1. h1 inside content__on__image div (most reliable)
+    // 2. Any heading element
+    // 3. img title attribute (has actual name unlike alt)
+    // 4. Link title attribute
     let name =
-      $card.find("h2, h3, h4").first().text().trim() ||
-      $card.find("img").attr("alt")?.trim() ||
+      $card.find(".content__on__image h1").first().text().trim() ||
+      $card.find("h1, h2, h3, h4").first().text().trim() ||
+      $card.find("img").attr("title")?.trim() ||
       $card.attr("title")?.trim() ||
       "";
 
-    // Skip if no name found or if it's a navigation/non-wrestler link
-    if (!name || name.length < 2) return;
+    // Skip generic names that aren't actual wrestlers
+    if (!name || name.length < 2 || name === "WWE Photo") return;
 
-    // Skip common non-wrestler pages
-    const skipSlugs = ["all", "index", "list", "search", "filter"];
-    if (skipSlugs.includes(slug)) return;
-
-    // Extract image URL
+    // Extract image URL - try src first, then picture source
     let imageUrl: string | null = null;
     const imgEl = $card.find("img").first();
     if (imgEl.length > 0) {
@@ -63,16 +72,28 @@ function parseWrestlerCards($: cheerio.CheerioAPI, brand: string): ScrapedWrestl
         imgEl.attr("data-src") ||
         imgEl.attr("data-lazy-src") ||
         null;
+    }
 
-      // Make sure it's an absolute URL
-      if (imageUrl && !imageUrl.startsWith("http")) {
-        imageUrl = `${WWE_BASE_URL}${imageUrl}`;
+    // Try picture source if no img src
+    if (!imageUrl) {
+      const sourceEl = $card.find("picture source").first();
+      if (sourceEl.length > 0) {
+        const srcset = sourceEl.attr("srcset") || "";
+        const srcMatch = srcset.match(/^([^\s]+)/);
+        if (srcMatch) {
+          imageUrl = srcMatch[1];
+        }
       }
+    }
 
-      // Skip placeholder/generic images
-      if (imageUrl && (imageUrl.includes("placeholder") || imageUrl.includes("default"))) {
-        imageUrl = null;
-      }
+    // Make sure it's an absolute URL
+    if (imageUrl && !imageUrl.startsWith("http")) {
+      imageUrl = `${WWE_BASE_URL}${imageUrl}`;
+    }
+
+    // Skip placeholder/generic images
+    if (imageUrl && (imageUrl.includes("placeholder") || imageUrl.includes("default"))) {
+      imageUrl = null;
     }
 
     seenSlugs.add(slug);
