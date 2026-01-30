@@ -42,6 +42,7 @@ interface Entry {
   id: string;
   entryNumber: number;
   wrestlerName: string | null;
+  wrestlerImageUrl: string | null;
   enteredAt: string | null;
   eliminatedAt: string | null;
   eliminatedBy: string | null;
@@ -88,11 +89,16 @@ interface FloatingName {
   id: string;
   entryNumber: number;
   wrestlerName: string;
-  x: number;  // percentage 5-95
-  y: number;  // percentage 20-80
+  duration: string;           // "2:34" format
+  x: number;                  // px position
+  y: number;
+  vx: number;                 // velocity X (px/frame)
+  vy: number;                 // velocity Y (px/frame)
+  width: number;              // element width for collision
+  height: number;             // element height for collision
   status: CelebrationNameStatus;
-  exitX?: number;  // random exit direction for elimination
-  exitY?: number;
+  scale: number;              // for enter animation (1.5 -> 1.0)
+  opacity: number;            // for fade effect (1.0 -> 0.85)
 }
 
 export default function TVDisplayV2Page({ params }: { params: Promise<{ id: string }> }) {
@@ -115,7 +121,9 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
   const [celebrationTimeline, setCelebrationTimeline] = useState<ReplayEvent[]>([]);
   const celebrationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const winnerTimestampRef = useRef<number | null>(null);
-  const usedPositionsRef = useRef<{x: number, y: number}[]>([]);
+  const animationFrameRef = useRef<number | null>(null);
+  const celebrationContainerRef = useRef<HTMLDivElement>(null);
+  const floatingNamesRef = useRef<FloatingName[]>([]);
 
   // Track previous entries for detecting changes
   const prevEntriesRef = useRef<Entry[]>([]);
@@ -240,46 +248,111 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
     return () => clearInterval(interval);
   }, [fetchParty]);
 
-  // Generate a random position that doesn't overlap too much with existing positions
-  const generateRandomPosition = useCallback((): { x: number; y: number } => {
-    const minDistance = 12; // minimum distance between names in percentage
-    let attempts = 0;
-    const maxAttempts = 20;
+  // Collision detection between two floating names
+  const checkCollision = useCallback((a: FloatingName, b: FloatingName): boolean => {
+    const padding = 8; // small buffer to prevent touching
+    return !(a.x + a.width + padding < b.x ||
+             b.x + b.width + padding < a.x ||
+             a.y + a.height + padding < b.y ||
+             b.y + b.height + padding < a.y);
+  }, []);
 
-    while (attempts < maxAttempts) {
-      const x = 10 + Math.random() * 80; // 10-90%
-      const y = 25 + Math.random() * 50; // 25-75%
+  // Resolve collision by swapping velocity components
+  const resolveCollision = useCallback((a: FloatingName, b: FloatingName) => {
+    // Calculate center points
+    const ax = a.x + a.width / 2;
+    const ay = a.y + a.height / 2;
+    const bx = b.x + b.width / 2;
+    const by = b.y + b.height / 2;
 
-      // Check distance from existing positions
-      const tooClose = usedPositionsRef.current.some(pos => {
-        const dx = pos.x - x;
-        const dy = pos.y - y;
-        return Math.sqrt(dx * dx + dy * dy) < minDistance;
+    // Normal vector
+    const dx = bx - ax;
+    const dy = by - ay;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const nx = dx / dist;
+    const ny = dy / dist;
+
+    // Relative velocity
+    const dvx = a.vx - b.vx;
+    const dvy = a.vy - b.vy;
+    const dvn = dvx * nx + dvy * ny;
+
+    // Only resolve if approaching
+    if (dvn > 0) return;
+
+    // Swap velocity components along normal with some energy loss
+    const restitution = 0.9;
+    a.vx -= dvn * nx * restitution;
+    a.vy -= dvn * ny * restitution;
+    b.vx += dvn * nx * restitution;
+    b.vy += dvn * ny * restitution;
+
+    // Push apart to prevent sticking
+    const overlap = (a.width + b.width) / 2 - dist + 20;
+    if (overlap > 0) {
+      a.x -= overlap * nx / 2;
+      a.y -= overlap * ny / 2;
+      b.x += overlap * nx / 2;
+      b.y += overlap * ny / 2;
+    }
+  }, []);
+
+  // Generate initial position that doesn't overlap existing names
+  const generateInitialPosition = useCallback((
+    containerWidth: number,
+    containerHeight: number,
+    elementWidth: number,
+    elementHeight: number
+  ): { x: number; y: number } => {
+    const margin = 50;
+    const maxAttempts = 30;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const x = margin + Math.random() * (containerWidth - elementWidth - margin * 2);
+      const y = margin + Math.random() * (containerHeight - elementHeight - margin * 2);
+
+      // Check against existing names
+      const overlaps = floatingNamesRef.current.some(name => {
+        if (name.status === "eliminated") return false;
+        const padding = 20;
+        return !(x + elementWidth + padding < name.x ||
+                 name.x + name.width + padding < x ||
+                 y + elementHeight + padding < name.y ||
+                 name.y + name.height + padding < y);
       });
 
-      if (!tooClose) {
-        usedPositionsRef.current.push({ x, y });
+      if (!overlaps) {
         return { x, y };
       }
-      attempts++;
     }
 
-    // Fallback: just return a random position
-    const x = 10 + Math.random() * 80;
-    const y = 25 + Math.random() * 50;
-    usedPositionsRef.current.push({ x, y });
-    return { x, y };
-  }, []);
-
-  // Generate random exit direction for elimination
-  const generateExitDirection = useCallback((): { exitX: number; exitY: number } => {
-    const angle = Math.random() * Math.PI * 2; // random angle
-    const distance = 300 + Math.random() * 200; // 300-500px
+    // Fallback: return a random position anyway
     return {
-      exitX: Math.cos(angle) * distance,
-      exitY: Math.sin(angle) * distance,
+      x: margin + Math.random() * (containerWidth - elementWidth - margin * 2),
+      y: margin + Math.random() * (containerHeight - elementHeight - margin * 2),
     };
   }, []);
+
+  // Generate random velocity
+  const generateRandomVelocity = useCallback((): { vx: number; vy: number } => {
+    const speed = 1.5 + Math.random() * 1.5; // 1.5-3 px/frame
+    const angle = Math.random() * Math.PI * 2;
+    return {
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+    };
+  }, []);
+
+  // Helper to format duration as MM:SS
+  const formatDuration = useCallback((enteredAt: string | null, eliminatedAt: string | null): string => {
+    if (!enteredAt) return "0:00";
+    const startTime = new Date(enteredAt).getTime();
+    const endTime = eliminatedAt ? new Date(eliminatedAt).getTime() : now;
+    const duration = Math.floor((endTime - startTime) / 1000);
+    const minutes = Math.floor(duration / 60);
+    const seconds = duration % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }, [now]);
 
   // Build replay timeline from entries
   const buildReplayTimeline = useCallback((entries: Entry[]): ReplayEvent[] => {
@@ -333,7 +406,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
         setCelebrationTimeline(timeline);
         setCelebrationReplayIndex(0);
         setFloatingNames([]);
-        usedPositionsRef.current = [];
+        floatingNamesRef.current = [];
         setShowCelebrationReplay(true);
       };
 
@@ -356,7 +429,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
         celebrationTimeoutRef.current = setTimeout(() => {
           setCelebrationReplayIndex(0);
           setFloatingNames([]);
-          usedPositionsRef.current = [];
+          floatingNamesRef.current = [];
         }, 3000);
         return;
       }
@@ -366,49 +439,74 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
       const delay = event.type === "entry" ? 300 : event.type === "elimination" ? 400 : 1000;
 
       if (event.type === "entry" && event.entry.wrestlerName) {
-        const position = generateRandomPosition();
-        const exitDir = generateExitDirection();
+        const container = celebrationContainerRef.current;
+        const containerWidth = container?.clientWidth || window.innerWidth;
+        const containerHeight = container?.clientHeight || window.innerHeight;
+
+        // Estimate element size (will be updated by measurement)
+        const estimatedWidth = 250;
+        const estimatedHeight = 50;
+
+        const position = generateInitialPosition(containerWidth, containerHeight, estimatedWidth, estimatedHeight);
+        const velocity = generateRandomVelocity();
+
+        // Calculate duration for this entry
+        const entryDuration = formatDuration(event.entry.enteredAt, event.entry.eliminatedAt);
+
+        const newName: FloatingName = {
+          id: event.entry.id,
+          entryNumber: event.entry.entryNumber,
+          wrestlerName: event.entry.wrestlerName!,
+          duration: entryDuration,
+          x: position.x,
+          y: position.y,
+          vx: velocity.vx,
+          vy: velocity.vy,
+          width: estimatedWidth,
+          height: estimatedHeight,
+          status: "entering",
+          scale: 1.5,
+          opacity: 1.0,
+        };
 
         // Add new floating name in "entering" state
-        setFloatingNames((prev) => [
-          ...prev,
-          {
-            id: event.entry.id,
-            entryNumber: event.entry.entryNumber,
-            wrestlerName: event.entry.wrestlerName!,
-            x: position.x,
-            y: position.y,
-            status: "entering",
-            exitX: exitDir.exitX,
-            exitY: exitDir.exitY,
-          },
-        ]);
+        setFloatingNames((prev) => {
+          const updated = [...prev, newName];
+          floatingNamesRef.current = updated;
+          return updated;
+        });
 
-        // Transition to "active" after 200ms
+        // Transition to "active" after 500ms with shrink animation
         setTimeout(() => {
-          setFloatingNames((prev) =>
-            prev.map((n) =>
+          setFloatingNames((prev) => {
+            const updated = prev.map((n) =>
               n.id === event.entry.id && n.status === "entering"
-                ? { ...n, status: "active" }
+                ? { ...n, status: "active" as CelebrationNameStatus, scale: 1.0, opacity: 0.85 }
                 : n
-            )
-          );
-        }, 200);
+            );
+            floatingNamesRef.current = updated;
+            return updated;
+          });
+        }, 500);
       } else if (event.type === "elimination" && event.entry.wrestlerName) {
         // Set the eliminated wrestler to "eliminating" state
-        setFloatingNames((prev) =>
-          prev.map((n) =>
-            n.id === event.entry.id ? { ...n, status: "eliminating" } : n
-          )
-        );
-
-        // Transition to "eliminated" (remove from display) after 300ms
-        setTimeout(() => {
-          setFloatingNames((prev) =>
-            prev.map((n) =>
-              n.id === event.entry.id ? { ...n, status: "eliminated" } : n
-            )
+        setFloatingNames((prev) => {
+          const updated = prev.map((n) =>
+            n.id === event.entry.id ? { ...n, status: "eliminating" as CelebrationNameStatus, scale: 0, opacity: 0 } : n
           );
+          floatingNamesRef.current = updated;
+          return updated;
+        });
+
+        // Transition to "eliminated" (remove from physics) after 300ms
+        setTimeout(() => {
+          setFloatingNames((prev) => {
+            const updated = prev.map((n) =>
+              n.id === event.entry.id ? { ...n, status: "eliminated" as CelebrationNameStatus } : n
+            );
+            floatingNamesRef.current = updated;
+            return updated;
+          });
         }, 300);
       }
 
@@ -424,18 +522,115 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
         clearTimeout(celebrationTimeoutRef.current);
       }
     };
-  }, [showCelebrationReplay, celebrationReplayIndex, celebrationTimeline, generateRandomPosition, generateExitDirection]);
+  }, [showCelebrationReplay, celebrationReplayIndex, celebrationTimeline, generateInitialPosition, generateRandomVelocity, formatDuration]);
 
-  // Helper to format duration as MM:SS
-  const formatDuration = (enteredAt: string | null, eliminatedAt: string | null): string => {
-    if (!enteredAt) return "0:00";
-    const startTime = new Date(enteredAt).getTime();
-    const endTime = eliminatedAt ? new Date(eliminatedAt).getTime() : now;
-    const duration = Math.floor((endTime - startTime) / 1000);
-    const minutes = Math.floor(duration / 60);
-    const seconds = duration % 60;
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
+  // Physics animation loop for bouncing names
+  useEffect(() => {
+    if (!showCelebrationReplay) return;
+
+    const updatePhysics = () => {
+      const container = celebrationContainerRef.current;
+      if (!container) {
+        animationFrameRef.current = requestAnimationFrame(updatePhysics);
+        return;
+      }
+
+      const { width, height } = container.getBoundingClientRect();
+
+      setFloatingNames((prev) => {
+        // Skip if no names to animate
+        if (prev.length === 0) return prev;
+
+        // Create mutable copies for physics updates
+        const next = prev.map((name) => ({ ...name }));
+
+        // Update positions for active names
+        for (const name of next) {
+          if (name.status === "eliminated" || name.status === "eliminating") continue;
+
+          // Update position
+          name.x += name.vx;
+          name.y += name.vy;
+
+          // Wall bounce with margin
+          const margin = 10;
+          if (name.x < margin) {
+            name.x = margin;
+            name.vx = Math.abs(name.vx);
+          }
+          if (name.x + name.width > width - margin) {
+            name.x = width - name.width - margin;
+            name.vx = -Math.abs(name.vx);
+          }
+          if (name.y < margin) {
+            name.y = margin;
+            name.vy = Math.abs(name.vy);
+          }
+          if (name.y + name.height > height - margin) {
+            name.y = height - name.height - margin;
+            name.vy = -Math.abs(name.vy);
+          }
+        }
+
+        // Element collision detection
+        for (let i = 0; i < next.length; i++) {
+          for (let j = i + 1; j < next.length; j++) {
+            const a = next[i];
+            const b = next[j];
+            if (a.status !== "eliminated" && a.status !== "eliminating" &&
+                b.status !== "eliminated" && b.status !== "eliminating") {
+              if (checkCollision(a, b)) {
+                resolveCollision(a, b);
+              }
+            }
+          }
+        }
+
+        floatingNamesRef.current = next;
+        return next;
+      });
+
+      animationFrameRef.current = requestAnimationFrame(updatePhysics);
+    };
+
+    animationFrameRef.current = requestAnimationFrame(updatePhysics);
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [showCelebrationReplay, checkCollision, resolveCollision]);
+
+  // Measure floating name elements after render to get accurate sizes
+  useEffect(() => {
+    if (!showCelebrationReplay || !celebrationContainerRef.current) return;
+
+    const container = celebrationContainerRef.current;
+    const elements = container.querySelectorAll('[data-floating-name]');
+
+    if (elements.length === 0) return;
+
+    setFloatingNames((prev) => {
+      let updated = false;
+      const next = prev.map((name) => {
+        const element = container.querySelector(`[data-floating-name="${name.id}"]`);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.width !== name.width || rect.height !== name.height) {
+            updated = true;
+            return { ...name, width: rect.width, height: rect.height };
+          }
+        }
+        return name;
+      });
+      if (updated) {
+        floatingNamesRef.current = next;
+        return next;
+      }
+      return prev;
+    });
+  }, [showCelebrationReplay, floatingNames.length]);
 
   if (loading) {
     return (
@@ -549,38 +744,57 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
 
           {/* Full-Screen Floating Names Replay */}
           {showCelebrationReplay && (
-            <div className="absolute inset-0 pointer-events-none overflow-hidden z-20">
+            <div
+              ref={celebrationContainerRef}
+              className="absolute inset-0 pointer-events-none overflow-hidden z-20"
+            >
               {floatingNames.map((name) => {
                 if (name.status === "eliminated") return null;
 
-                let animationClass = "";
-                let animationStyle: React.CSSProperties = {};
-
-                if (name.status === "entering") {
-                  animationClass = "animate-[floatIn_0.2s_ease-out_forwards]";
-                } else if (name.status === "active") {
-                  animationClass = "animate-[floatBob_2s_ease-in-out_infinite]";
-                } else if (name.status === "eliminating") {
-                  animationClass = "animate-[floatEliminate_0.3s_ease-in_forwards]";
-                  animationStyle = {
-                    "--exit-x": `${name.exitX}px`,
-                    "--exit-y": `${name.exitY}px`,
-                  } as React.CSSProperties;
-                }
+                // Find the winner to give special treatment
+                const isWinner = winner?.id === name.id;
 
                 return (
                   <div
                     key={name.id}
-                    className={`absolute text-white font-bold text-xl ${animationClass}`}
+                    data-floating-name={name.id}
+                    className={`absolute flex items-center gap-2 px-3 py-2 rounded-lg whitespace-nowrap ${
+                      isWinner
+                        ? "bg-yellow-500/30 border-2 border-yellow-400"
+                        : "bg-black/40 backdrop-blur-sm"
+                    }`}
                     style={{
-                      left: `${name.x}%`,
-                      top: `${name.y}%`,
-                      transform: "translate(-50%, -50%)",
-                      ...animationStyle,
+                      left: `${name.x}px`,
+                      top: `${name.y}px`,
+                      transform: `scale(${name.scale})`,
+                      opacity: name.opacity,
+                      transition: name.status === "entering" || name.status === "eliminating"
+                        ? "transform 0.5s ease-out, opacity 0.3s ease-out"
+                        : "none",
                     }}
                   >
-                    <span className="text-yellow-400 text-sm mr-1">#{name.entryNumber}</span>
-                    {name.wrestlerName}
+                    <span
+                      className={`font-bold ${isWinner ? "text-yellow-300" : "text-yellow-400"}`}
+                      style={{ fontSize: `${20 * name.scale}px` }}
+                    >
+                      #{name.entryNumber}
+                    </span>
+                    <span
+                      className="text-white font-black"
+                      style={{ fontSize: `${28 * name.scale}px` }}
+                    >
+                      {name.wrestlerName}
+                    </span>
+                    {isWinner ? (
+                      <span className="text-yellow-400 text-2xl ml-1">👑</span>
+                    ) : (
+                      <span
+                        className="text-gray-400 ml-2"
+                        style={{ fontSize: `${16 * name.scale}px` }}
+                      >
+                        {name.duration}
+                      </span>
+                    )}
                   </div>
                 );
               })}
@@ -725,9 +939,23 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                         {formatDuration(entry.enteredAt, null)}
                       </span>
                     </div>
-                    <p className="text-2xl font-black text-white leading-tight flex-1 flex items-center">
-                      {entry.wrestlerName}
-                    </p>
+                    <div className="flex items-center gap-2 flex-1">
+                      {entry.wrestlerImageUrl && (
+                        <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-700 flex-shrink-0">
+                          <img
+                            src={entry.wrestlerImageUrl}
+                            alt={entry.wrestlerName || ""}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                        </div>
+                      )}
+                      <p className="text-2xl font-black text-white leading-tight">
+                        {entry.wrestlerName}
+                      </p>
+                    </div>
                     <div className="flex items-center gap-2 mt-auto">
                       {participantInfo?.profileImageUrl && (
                         <img
@@ -749,9 +977,23 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                     <span className="inline-block bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded mb-1 self-start">
                       ELIMINATED
                     </span>
-                    <p className="text-xl font-bold text-white/80 leading-tight">
-                      {entry.wrestlerName}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      {entry.wrestlerImageUrl && (
+                        <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-700 flex-shrink-0 opacity-50 grayscale">
+                          <img
+                            src={entry.wrestlerImageUrl}
+                            alt={entry.wrestlerName || ""}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                        </div>
+                      )}
+                      <p className="text-xl font-bold text-white/80 leading-tight">
+                        {entry.wrestlerName}
+                      </p>
+                    </div>
                     <div className="flex justify-between items-center mt-auto">
                       <div className="flex items-center gap-2 min-w-0">
                         {participantInfo?.profileImageUrl && (
@@ -777,9 +1019,23 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                       <span className="text-lg font-bold text-yellow-300">{num}</span>
                       <span className="text-yellow-400 text-2xl">👑</span>
                     </div>
-                    <p className="text-2xl font-black text-white leading-tight flex-1 flex items-center">
-                      {entry.wrestlerName}
-                    </p>
+                    <div className="flex items-center gap-2 flex-1">
+                      {entry.wrestlerImageUrl && (
+                        <div className="w-12 h-12 rounded-full overflow-hidden bg-yellow-700/50 flex-shrink-0 ring-2 ring-yellow-400">
+                          <img
+                            src={entry.wrestlerImageUrl}
+                            alt={entry.wrestlerName || ""}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                        </div>
+                      )}
+                      <p className="text-2xl font-black text-white leading-tight">
+                        {entry.wrestlerName}
+                      </p>
+                    </div>
                     <div className="flex items-center gap-2">
                       {participantInfo?.profileImageUrl && (
                         <img
