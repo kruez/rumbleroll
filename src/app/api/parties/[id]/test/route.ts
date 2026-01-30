@@ -176,6 +176,28 @@ export async function POST(
         });
       }
 
+      case "refreshProfileImages": {
+        // Update all test participants in this party with profile images
+        const testParticipants = party.participants.filter(
+          p => p.user.email.endsWith("@test.local")
+        );
+
+        for (const participant of testParticipants) {
+          const name = participant.user.name || participant.user.email.split("@")[0];
+          await prisma.user.update({
+            where: { id: participant.userId },
+            data: {
+              profileImageUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
+            },
+          });
+        }
+
+        return NextResponse.json({
+          success: true,
+          message: `Updated ${testParticipants.length} test player profile images`,
+        });
+      }
+
       case "reset": {
         // Remove test players
         const testParticipants = party.participants.filter(

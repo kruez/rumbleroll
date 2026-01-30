@@ -650,6 +650,14 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                 {/* ===== PENDING CARD ===== */}
                 {state === "pending" && (
                   <div className="flex flex-col items-center justify-center h-full relative z-10">
+                    {/* Shimmer overlay for UP NEXT */}
+                    {num === nextUpEntryNumber && (
+                      <div className="absolute inset-0 overflow-hidden rounded-lg pointer-events-none">
+                        <div
+                          className="absolute inset-0 w-[200%] h-full bg-gradient-to-r from-transparent via-white/20 to-transparent animate-[shimmerSweep_2s_ease-in-out_infinite]"
+                        />
+                      </div>
+                    )}
                     <span className="text-4xl font-black text-white/90">{num}</span>
                     <p className="text-xl font-bold truncate w-full text-center mt-1 text-white/80">
                       {participantInfo?.name || "Unassigned"}
@@ -707,7 +715,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                         )}
                         <span className="text-base text-gray-300 truncate">{participantInfo?.name}</span>
                       </div>
-                      <span className="font-mono text-sm text-gray-400 flex-shrink-0 ml-2">
+                      <span className="font-mono text-lg font-bold text-white/70 flex-shrink-0 ml-2">
                         {formatDuration(entry.enteredAt, entry.eliminatedAt)}
                       </span>
                     </div>
