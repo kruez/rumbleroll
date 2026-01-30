@@ -398,39 +398,37 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
   }, []);
 
   // Start celebration replay 5 seconds after winner is shown
-  useEffect(() => {
-    // DISABLED: Match replay is malfunctioning - showing same wrestler repeatedly
-    return;
-
-    if (!party) return;
-
-    const winner = party.event.entries.find((e) => e.isWinner);
-
-    if (winner && !winnerTimestampRef.current) {
-      winnerTimestampRef.current = Date.now();
-    }
-
-    if (winner && winnerTimestampRef.current && !showCelebrationReplay) {
-      const elapsed = Date.now() - winnerTimestampRef.current;
-      const timeUntilReplay = 5000 - elapsed;
-
-      const startReplay = () => {
-        const timeline = buildReplayTimeline(party.event.entries);
-        setCelebrationTimeline(timeline);
-        setCelebrationReplayIndex(0);
-        setFloatingNames([]);
-        floatingNamesRef.current = [];
-        setShowCelebrationReplay(true);
-      };
-
-      if (timeUntilReplay <= 0) {
-        startReplay();
-      } else {
-        const timeout = setTimeout(startReplay, timeUntilReplay);
-        return () => clearTimeout(timeout);
-      }
-    }
-  }, [party, showCelebrationReplay, buildReplayTimeline]);
+  // DISABLED: Match replay is malfunctioning - showing same wrestler repeatedly
+  // useEffect(() => {
+  //   if (!party) return;
+  //
+  //   const winner = party.event.entries.find((e) => e.isWinner);
+  //
+  //   if (winner && !winnerTimestampRef.current) {
+  //     winnerTimestampRef.current = Date.now();
+  //   }
+  //
+  //   if (winner && winnerTimestampRef.current && !showCelebrationReplay) {
+  //     const elapsed = Date.now() - winnerTimestampRef.current;
+  //     const timeUntilReplay = 5000 - elapsed;
+  //
+  //     const startReplay = () => {
+  //       const timeline = buildReplayTimeline(party.event.entries);
+  //       setCelebrationTimeline(timeline);
+  //       setCelebrationReplayIndex(0);
+  //       setFloatingNames([]);
+  //       floatingNamesRef.current = [];
+  //       setShowCelebrationReplay(true);
+  //     };
+  //
+  //     if (timeUntilReplay <= 0) {
+  //       startReplay();
+  //     } else {
+  //       const timeout = setTimeout(startReplay, timeUntilReplay);
+  //       return () => clearTimeout(timeout);
+  //     }
+  //   }
+  // }, [party, showCelebrationReplay, buildReplayTimeline]);
 
   // Process celebration replay events with calm, dramatic timing
   useEffect(() => {
