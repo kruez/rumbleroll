@@ -547,6 +547,27 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
           </div>
         )}
 
+        {/* Test Player Utilities - Always available for hosts */}
+        {party.participants.some(p => p.user.email.endsWith("@test.local")) && (
+          <Card className="bg-blue-500/10 border-blue-500/50 mt-8">
+            <CardHeader>
+              <CardTitle className="text-blue-400 text-lg">Test Player Utilities</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button
+                onClick={() => handleTestModeAction("refreshProfileImages")}
+                disabled={testModeLoading}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {testModeLoading ? "Updating..." : "Refresh Profile Images"}
+              </Button>
+              <p className="text-gray-500 text-xs mt-2">
+                Updates all test players with DiceBear avatars. Use this if profile images aren&apos;t showing on the TV scoreboard.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Danger Zone */}
         <Card className="bg-red-500/10 border-red-500/50 mt-8">
           <CardHeader>
