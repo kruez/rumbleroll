@@ -128,7 +128,7 @@ export default function AdminPage() {
               <h1 className="text-2xl font-bold text-white">Admin Panel</h1>
             </div>
             <Link href="/admin/wrestlers">
-              <Button variant="outline" className="border-gray-600 text-gray-300 hover:bg-gray-800">
+              <Button className="bg-gray-700 text-white hover:bg-gray-600">
                 Manage Wrestlers
               </Button>
             </Link>
