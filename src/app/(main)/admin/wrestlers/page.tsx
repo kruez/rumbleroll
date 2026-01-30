@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Header } from "@/components/Header";
 
 interface ScrapeStats {
@@ -24,6 +26,10 @@ export default function WrestlerManagementPage() {
   const [loading, setLoading] = useState(true);
   const [scraping, setScraping] = useState(false);
   const [scrapeResult, setScrapeResult] = useState<{ success: boolean; totalCount: number; errorMessage?: string } | null>(null);
+  const [newWrestlerName, setNewWrestlerName] = useState("");
+  const [newWrestlerImage, setNewWrestlerImage] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addResult, setAddResult] = useState<{ success: boolean; error?: string } | null>(null);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -67,6 +73,36 @@ export default function WrestlerManagementPage() {
       setScrapeResult({ success: false, totalCount: 0, errorMessage: "Request failed" });
     } finally {
       setScraping(false);
+    }
+  };
+
+  const handleAddWrestler = async () => {
+    if (!newWrestlerName.trim()) return;
+    setAdding(true);
+    setAddResult(null);
+    try {
+      const res = await fetch("/api/admin/wrestlers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newWrestlerName.trim(),
+          imageUrl: newWrestlerImage.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAddResult({ success: true });
+        setNewWrestlerName("");
+        setNewWrestlerImage("");
+        fetchStats();
+      } else {
+        setAddResult({ success: false, error: data.error });
+      }
+    } catch (error) {
+      console.error("Failed to add wrestler:", error);
+      setAddResult({ success: false, error: "Request failed" });
+    } finally {
+      setAdding(false);
     }
   };
 
@@ -200,6 +236,58 @@ export default function WrestlerManagementPage() {
                   <p className="text-red-400">
                     Scrape failed: {scrapeResult.errorMessage || "Unknown error"}
                   </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Add Wrestler Card */}
+        <Card className="bg-gray-800/50 border-gray-700 mb-8">
+          <CardHeader>
+            <CardTitle className="text-white">Add Wrestler Manually</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-gray-400 text-sm mb-4">
+              Add wrestlers not found in the scraped database (e.g., surprise entrants, legends, new debuts)
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="wrestlerName" className="text-white">Wrestler Name *</Label>
+                <Input
+                  id="wrestlerName"
+                  placeholder="e.g., John Cena"
+                  value={newWrestlerName}
+                  onChange={(e) => setNewWrestlerName(e.target.value)}
+                  className="bg-gray-700 border-gray-600 text-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="wrestlerImage" className="text-white">Image URL (optional)</Label>
+                <Input
+                  id="wrestlerImage"
+                  placeholder="https://..."
+                  value={newWrestlerImage}
+                  onChange={(e) => setNewWrestlerImage(e.target.value)}
+                  className="bg-gray-700 border-gray-600 text-white"
+                />
+              </div>
+            </div>
+            <div className="mt-4">
+              <Button
+                onClick={handleAddWrestler}
+                disabled={adding || !newWrestlerName.trim()}
+                className="bg-purple-600 hover:bg-purple-700"
+              >
+                {adding ? "Adding..." : "Add Wrestler"}
+              </Button>
+            </div>
+            {addResult && (
+              <div className={`mt-4 p-3 rounded-lg ${addResult.success ? "bg-green-900/30 border border-green-500" : "bg-red-900/30 border border-red-500"}`}>
+                {addResult.success ? (
+                  <p className="text-green-400">Wrestler added successfully</p>
+                ) : (
+                  <p className="text-red-400">{addResult.error || "Failed to add wrestler"}</p>
                 )}
               </div>
             )}

@@ -11,14 +11,17 @@ export async function GET() {
     }
 
     const metadata = await prisma.scrapeCacheMetadata.findUnique({
-      where: { source: "wwe" },
+      where: { source: "smackdownhotel" },
     });
+
+    // Get actual wrestler count from database
+    const wrestlerCount = await prisma.wrestler.count();
 
     if (!metadata) {
       return NextResponse.json({
-        source: "wwe",
+        source: "smackdownhotel",
         lastScrapedAt: null,
-        totalCount: 0,
+        totalCount: wrestlerCount,
         status: "never",
         staleness: "stale",
       });
@@ -41,7 +44,7 @@ export async function GET() {
     return NextResponse.json({
       source: metadata.source,
       lastScrapedAt: metadata.lastScrapedAt.toISOString(),
-      totalCount: metadata.totalCount,
+      totalCount: wrestlerCount,
       status: metadata.status,
       staleness,
       errorMessage: metadata.errorMessage,
