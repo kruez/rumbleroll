@@ -120,10 +120,19 @@ export default function AdminPage() {
       {/* Page Header */}
       <div className="border-b border-gray-700 bg-gray-900/30">
         <div className="container mx-auto px-4 py-4">
-          <Link href="/dashboard" className="text-gray-400 hover:text-white text-sm">
-            &larr; Dashboard
-          </Link>
-          <h1 className="text-2xl font-bold text-white">Admin Panel</h1>
+          <div className="flex justify-between items-start">
+            <div>
+              <Link href="/dashboard" className="text-gray-400 hover:text-white text-sm">
+                &larr; Dashboard
+              </Link>
+              <h1 className="text-2xl font-bold text-white">Admin Panel</h1>
+            </div>
+            <Link href="/admin/wrestlers">
+              <Button variant="outline" className="border-gray-600 text-gray-300 hover:bg-gray-800">
+                Manage Wrestlers
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 
