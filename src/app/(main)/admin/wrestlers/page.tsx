@@ -214,13 +214,13 @@ export default function WrestlerManagementPage() {
           <CardContent className="text-gray-400">
             <ul className="space-y-2">
               <li>
-                <strong className="text-white">Data Source:</strong> WWE.com superstars pages
+                <strong className="text-white">Data Source:</strong> TheSmackdownHotel.com WWE roster
               </li>
               <li>
-                <strong className="text-white">Includes:</strong> Current Raw, SmackDown, NXT superstars and alumni
+                <strong className="text-white">Includes:</strong> Current Raw, SmackDown, NXT superstars and legends
               </li>
               <li>
-                <strong className="text-white">Images:</strong> Wrestler photos are loaded directly from WWE CDN
+                <strong className="text-white">Images:</strong> Wrestler photos from TheSmackdownHotel
               </li>
               <li>
                 <strong className="text-white">Freshness:</strong> Green (0-7 days), Yellow (7-30 days), Red (30+ days)
