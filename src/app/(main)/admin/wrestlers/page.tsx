@@ -119,7 +119,7 @@ export default function WrestlerManagementPage() {
       const res = await fetch(`/api/wrestlers/search?q=${encodeURIComponent(query)}&limit=20`);
       if (res.ok) {
         const data = await res.json();
-        setSearchResults(data.wrestlers || []);
+        setSearchResults(Array.isArray(data) ? data : []);
       }
     } catch (error) {
       console.error("Search failed:", error);
