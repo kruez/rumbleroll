@@ -393,3 +393,42 @@
     transform: translateX(200%) rotate(25deg);
   }
 }
+
+/* Full-Screen Floating Name Replay Animations */
+
+/* Floating name entrance - pop in with scale */
+@keyframes floatIn {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* Gentle floating/bobbing for active names */
+@keyframes floatBob {
+  0%, 100% {
+    transform: translate(-50%, -50%) translateY(0px);
+  }
+  50% {
+    transform: translate(-50%, -50%) translateY(-10px);
+  }
+}
+
+/* Elimination - fly off screen with spin */
+@keyframes floatEliminate {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--exit-x, 200px)), calc(-50% + var(--exit-y, -200px))) scale(0.3) rotate(720deg);
+  }
+}

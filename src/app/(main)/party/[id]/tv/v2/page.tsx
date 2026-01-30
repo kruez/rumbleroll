@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, use, useCallback, useRef, useMemo } from "react";
-import { Badge } from "@/components/ui/badge";
 
 const PLAYER_COLORS = [
   // Primary bright colors (10)
@@ -85,6 +84,17 @@ interface ReplayEvent {
 
 type CelebrationNameStatus = "entering" | "active" | "eliminating" | "eliminated";
 
+interface FloatingName {
+  id: string;
+  entryNumber: number;
+  wrestlerName: string;
+  x: number;  // percentage 5-95
+  y: number;  // percentage 20-80
+  status: CelebrationNameStatus;
+  exitX?: number;  // random exit direction for elimination
+  exitY?: number;
+}
+
 export default function TVDisplayV2Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [party, setParty] = useState<Party | null>(null);
@@ -101,10 +111,11 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
   // Winner celebration replay state
   const [showCelebrationReplay, setShowCelebrationReplay] = useState(false);
   const [celebrationReplayIndex, setCelebrationReplayIndex] = useState(0);
-  const [celebrationNames, setCelebrationNames] = useState<Map<string, CelebrationNameStatus>>(new Map());
+  const [floatingNames, setFloatingNames] = useState<FloatingName[]>([]);
   const [celebrationTimeline, setCelebrationTimeline] = useState<ReplayEvent[]>([]);
   const celebrationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const winnerTimestampRef = useRef<number | null>(null);
+  const usedPositionsRef = useRef<{x: number, y: number}[]>([]);
 
   // Track previous entries for detecting changes
   const prevEntriesRef = useRef<Entry[]>([]);
@@ -229,6 +240,47 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
     return () => clearInterval(interval);
   }, [fetchParty]);
 
+  // Generate a random position that doesn't overlap too much with existing positions
+  const generateRandomPosition = useCallback((): { x: number; y: number } => {
+    const minDistance = 12; // minimum distance between names in percentage
+    let attempts = 0;
+    const maxAttempts = 20;
+
+    while (attempts < maxAttempts) {
+      const x = 10 + Math.random() * 80; // 10-90%
+      const y = 25 + Math.random() * 50; // 25-75%
+
+      // Check distance from existing positions
+      const tooClose = usedPositionsRef.current.some(pos => {
+        const dx = pos.x - x;
+        const dy = pos.y - y;
+        return Math.sqrt(dx * dx + dy * dy) < minDistance;
+      });
+
+      if (!tooClose) {
+        usedPositionsRef.current.push({ x, y });
+        return { x, y };
+      }
+      attempts++;
+    }
+
+    // Fallback: just return a random position
+    const x = 10 + Math.random() * 80;
+    const y = 25 + Math.random() * 50;
+    usedPositionsRef.current.push({ x, y });
+    return { x, y };
+  }, []);
+
+  // Generate random exit direction for elimination
+  const generateExitDirection = useCallback((): { exitX: number; exitY: number } => {
+    const angle = Math.random() * Math.PI * 2; // random angle
+    const distance = 300 + Math.random() * 200; // 300-500px
+    return {
+      exitX: Math.cos(angle) * distance,
+      exitY: Math.sin(angle) * distance,
+    };
+  }, []);
+
   // Build replay timeline from entries
   const buildReplayTimeline = useCallback((entries: Entry[]): ReplayEvent[] => {
     const events: ReplayEvent[] = [];
@@ -276,27 +328,25 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
       const elapsed = Date.now() - winnerTimestampRef.current;
       const timeUntilReplay = 5000 - elapsed;
 
-      if (timeUntilReplay <= 0) {
+      const startReplay = () => {
         const timeline = buildReplayTimeline(party.event.entries);
         setCelebrationTimeline(timeline);
         setCelebrationReplayIndex(0);
-        setCelebrationNames(new Map());
+        setFloatingNames([]);
+        usedPositionsRef.current = [];
         setShowCelebrationReplay(true);
-      } else {
-        const timeout = setTimeout(() => {
-          const timeline = buildReplayTimeline(party.event.entries);
-          setCelebrationTimeline(timeline);
-          setCelebrationReplayIndex(0);
-          setCelebrationNames(new Map());
-          setShowCelebrationReplay(true);
-        }, timeUntilReplay);
+      };
 
+      if (timeUntilReplay <= 0) {
+        startReplay();
+      } else {
+        const timeout = setTimeout(startReplay, timeUntilReplay);
         return () => clearTimeout(timeout);
       }
     }
   }, [party, showCelebrationReplay, buildReplayTimeline]);
 
-  // Process celebration replay events
+  // Process celebration replay events with faster timing
   useEffect(() => {
     if (!showCelebrationReplay || celebrationTimeline.length === 0) return;
 
@@ -305,63 +355,61 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
         // Replay complete, restart after 3 seconds
         celebrationTimeoutRef.current = setTimeout(() => {
           setCelebrationReplayIndex(0);
-          setCelebrationNames(new Map());
+          setFloatingNames([]);
+          usedPositionsRef.current = [];
         }, 3000);
         return;
       }
 
       const event = celebrationTimeline[celebrationReplayIndex];
-      const delay = event.type === "entry" ? 800 : event.type === "elimination" ? 1500 : 2000;
+      // Faster timing: entry=300ms, elimination=400ms, winner=1000ms
+      const delay = event.type === "entry" ? 300 : event.type === "elimination" ? 400 : 1000;
 
       if (event.type === "entry" && event.entry.wrestlerName) {
-        setCelebrationNames((prev) => {
-          const next = new Map(prev);
-          next.set(event.entry.id, "entering");
-          return next;
-        });
+        const position = generateRandomPosition();
+        const exitDir = generateExitDirection();
+
+        // Add new floating name in "entering" state
+        setFloatingNames((prev) => [
+          ...prev,
+          {
+            id: event.entry.id,
+            entryNumber: event.entry.entryNumber,
+            wrestlerName: event.entry.wrestlerName!,
+            x: position.x,
+            y: position.y,
+            status: "entering",
+            exitX: exitDir.exitX,
+            exitY: exitDir.exitY,
+          },
+        ]);
+
+        // Transition to "active" after 200ms
         setTimeout(() => {
-          setCelebrationNames((prev) => {
-            const next = new Map(prev);
-            if (next.get(event.entry.id) === "entering") {
-              next.set(event.entry.id, "active");
-            }
-            return next;
-          });
-        }, 500);
-      } else if (event.type === "elimination" && event.entry.wrestlerName && event.entry.eliminatedBy) {
-        const eliminatorEntry = celebrationTimeline.find(
-          (e) => e.entry.wrestlerName === event.entry.eliminatedBy && e.type === "entry"
+          setFloatingNames((prev) =>
+            prev.map((n) =>
+              n.id === event.entry.id && n.status === "entering"
+                ? { ...n, status: "active" }
+                : n
+            )
+          );
+        }, 200);
+      } else if (event.type === "elimination" && event.entry.wrestlerName) {
+        // Set the eliminated wrestler to "eliminating" state
+        setFloatingNames((prev) =>
+          prev.map((n) =>
+            n.id === event.entry.id ? { ...n, status: "eliminating" } : n
+          )
         );
 
-        setCelebrationNames((prev) => {
-          const next = new Map(prev);
-          next.set(event.entry.id, "eliminating");
-          if (eliminatorEntry) {
-            const eliminatorId = eliminatorEntry.entry.id;
-            const currentStatus = next.get(eliminatorId);
-            if (currentStatus === "active") {
-              next.set(eliminatorId, "eliminating");
-              setTimeout(() => {
-                setCelebrationNames((p) => {
-                  const n = new Map(p);
-                  if (n.get(eliminatorId) === "eliminating") {
-                    n.set(eliminatorId, "active");
-                  }
-                  return n;
-                });
-              }, 600);
-            }
-          }
-          return next;
-        });
-
+        // Transition to "eliminated" (remove from display) after 300ms
         setTimeout(() => {
-          setCelebrationNames((prev) => {
-            const next = new Map(prev);
-            next.set(event.entry.id, "eliminated");
-            return next;
-          });
-        }, 800);
+          setFloatingNames((prev) =>
+            prev.map((n) =>
+              n.id === event.entry.id ? { ...n, status: "eliminated" } : n
+            )
+          );
+        }, 300);
       }
 
       celebrationTimeoutRef.current = setTimeout(() => {
@@ -376,7 +424,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
         clearTimeout(celebrationTimeoutRef.current);
       }
     };
-  }, [showCelebrationReplay, celebrationReplayIndex, celebrationTimeline]);
+  }, [showCelebrationReplay, celebrationReplayIndex, celebrationTimeline, generateRandomPosition, generateExitDirection]);
 
   // Helper to format duration as MM:SS
   const formatDuration = (enteredAt: string | null, eliminatedAt: string | null): string => {
@@ -499,52 +547,43 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
             </div>
           </div>
 
-          {/* Visual Replay Area */}
+          {/* Full-Screen Floating Names Replay */}
           {showCelebrationReplay && (
-            <div className="relative z-10 mt-8 w-full max-w-4xl px-8 flex-1 overflow-hidden">
-              <div className="text-center mb-4">
-                <Badge className="bg-blue-600/80 text-white text-sm px-3 py-1">
-                  MATCH REPLAY
-                </Badge>
-              </div>
-              <div className="relative h-64 bg-black/50 rounded-xl border border-gray-700 overflow-hidden flex flex-wrap items-center justify-center gap-3 p-4">
-                {celebrationTimeline
-                  .filter((e) => e.type === "entry")
-                  .map((e) => {
-                    const status = celebrationNames.get(e.entry.id);
-                    if (!status) return null;
+            <div className="absolute inset-0 pointer-events-none overflow-hidden z-20">
+              {floatingNames.map((name) => {
+                if (name.status === "eliminated") return null;
 
-                    let animationClass = "";
-                    if (status === "entering") {
-                      animationClass = "animate-[zoomInFromFar_0.5s_ease-out_forwards]";
-                    } else if (status === "active") {
-                      animationClass = "opacity-30";
-                    } else if (status === "eliminating") {
-                      animationClass = "animate-[wrestlerHitOff_0.8s_ease-in_forwards]";
-                    } else if (status === "eliminated") {
-                      return null;
-                    }
+                let animationClass = "";
+                let animationStyle: React.CSSProperties = {};
 
-                    const isEliminator = celebrationTimeline.some(
-                      (evt) =>
-                        evt.type === "elimination" &&
-                        evt.entry.eliminatedBy === e.entry.wrestlerName &&
-                        celebrationNames.get(evt.entry.id) === "eliminating"
-                    );
+                if (name.status === "entering") {
+                  animationClass = "animate-[floatIn_0.2s_ease-out_forwards]";
+                } else if (name.status === "active") {
+                  animationClass = "animate-[floatBob_2s_ease-in-out_infinite]";
+                } else if (name.status === "eliminating") {
+                  animationClass = "animate-[floatEliminate_0.3s_ease-in_forwards]";
+                  animationStyle = {
+                    "--exit-x": `${name.exitX}px`,
+                    "--exit-y": `${name.exitY}px`,
+                  } as React.CSSProperties;
+                }
 
-                    return (
-                      <div
-                        key={e.entry.id}
-                        className={`px-3 py-1 text-white font-bold text-lg ${animationClass} ${
-                          isEliminator ? "animate-[eliminatorStrike_0.6s_ease-in-out]" : ""
-                        }`}
-                      >
-                        <span className="text-yellow-400 text-sm mr-1">#{e.entry.entryNumber}</span>
-                        {e.entry.wrestlerName}
-                      </div>
-                    );
-                  })}
-              </div>
+                return (
+                  <div
+                    key={name.id}
+                    className={`absolute text-white font-bold text-xl ${animationClass}`}
+                    style={{
+                      left: `${name.x}%`,
+                      top: `${name.y}%`,
+                      transform: "translate(-50%, -50%)",
+                      ...animationStyle,
+                    }}
+                  >
+                    <span className="text-yellow-400 text-sm mr-1">#{name.entryNumber}</span>
+                    {name.wrestlerName}
+                  </div>
+                );
+              })}
             </div>
           )}
 
