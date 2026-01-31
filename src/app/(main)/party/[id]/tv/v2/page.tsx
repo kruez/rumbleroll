@@ -70,6 +70,12 @@ interface RumbleEvent {
   entries: Entry[];
 }
 
+interface SharedAssignment {
+  entryNumber: number;
+  participantIds: string[];
+  shareGroup: number;
+}
+
 interface Party {
   id: string;
   name: string;
@@ -77,6 +83,7 @@ interface Party {
   status: "LOBBY" | "NUMBERS_ASSIGNED" | "COMPLETED";
   event: RumbleEvent;
   participants: Participant[];
+  sharedAssignments?: SharedAssignment[];
 }
 
 
@@ -147,6 +154,26 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
       }
     }
     return null;
+  }, [party]);
+
+  // Get all owners for shared numbers
+  const getSharedOwnersForEntry = useCallback((entryNumber: number): { names: string[]; profileImageUrls: (string | null | undefined)[] } | null => {
+    if (!party) return null;
+    const sharedInfo = party.sharedAssignments?.find(s => s.entryNumber === entryNumber);
+    if (!sharedInfo) return null;
+
+    const names: string[] = [];
+    const profileImageUrls: (string | null | undefined)[] = [];
+
+    sharedInfo.participantIds.forEach(pid => {
+      const p = party.participants.find(p => p.id === pid);
+      if (p) {
+        names.push(p.user.name || p.user.email.split("@")[0]);
+        profileImageUrls.push(p.user.profileImageUrl);
+      }
+    });
+
+    return { names, profileImageUrls };
   }, [party]);
 
   const fetchParty = useCallback(async () => {
@@ -768,18 +795,36 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                       </div>
                     )}
                     <span className="text-4xl font-black text-white/90">{num}</span>
-                    <div className="flex items-center gap-2 mt-1">
-                      {participantInfo?.profileImageUrl && (
-                        <img
-                          src={participantInfo.profileImageUrl}
-                          alt=""
-                          className="w-7 h-7 rounded-full flex-shrink-0"
-                        />
-                      )}
-                      <p className="text-2xl font-bold truncate text-white/80">
-                        {participantInfo?.name || "Unassigned"}
-                      </p>
-                    </div>
+                    {(() => {
+                      const sharedOwners = getSharedOwnersForEntry(num);
+                      if (sharedOwners && sharedOwners.names.length > 1) {
+                        // Shared: show all names smaller
+                        return (
+                          <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
+                            {sharedOwners.names.map((name, i) => (
+                              <span key={i} className="text-sm font-medium text-white/70">
+                                {name}{i < sharedOwners.names.length - 1 ? "," : ""}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      }
+                      // Not shared: show single name normally
+                      return (
+                        <div className="flex items-center gap-2 mt-1">
+                          {participantInfo?.profileImageUrl && (
+                            <img
+                              src={participantInfo.profileImageUrl}
+                              alt=""
+                              className="w-7 h-7 rounded-full flex-shrink-0"
+                            />
+                          )}
+                          <p className="text-2xl font-bold truncate text-white/80">
+                            {participantInfo?.name || "Unassigned"}
+                          </p>
+                        </div>
+                      );
+                    })()}
                     <span className={`text-sm mt-2 font-medium ${num === nextUpEntryNumber ? "text-purple-300" : "text-gray-500"}`}>
                       {num === nextUpEntryNumber ? "UP NEXT" : "WAITING"}
                     </span>
@@ -825,16 +870,36 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                       </p>
                     </div>
                     <div className="flex items-center gap-2 mt-auto">
-                      {participantInfo?.profileImageUrl && (
-                        <img
-                          src={participantInfo.profileImageUrl}
-                          alt=""
-                          className="w-7 h-7 rounded-full flex-shrink-0"
-                        />
-                      )}
-                      <p className="text-xl font-bold truncate text-white/80">
-                        {participantInfo?.name}
-                      </p>
+                      {(() => {
+                        const sharedOwners = getSharedOwnersForEntry(num);
+                        if (sharedOwners && sharedOwners.names.length > 1) {
+                          // Shared: show all names smaller
+                          return (
+                            <div className="flex flex-wrap items-center gap-1">
+                              {sharedOwners.names.map((name, i) => (
+                                <span key={i} className="text-sm font-medium text-white/70">
+                                  {name}{i < sharedOwners.names.length - 1 ? "," : ""}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        }
+                        // Not shared: show single name normally
+                        return (
+                          <>
+                            {participantInfo?.profileImageUrl && (
+                              <img
+                                src={participantInfo.profileImageUrl}
+                                alt=""
+                                className="w-7 h-7 rounded-full flex-shrink-0"
+                              />
+                            )}
+                            <p className="text-xl font-bold truncate text-white/80">
+                              {participantInfo?.name}
+                            </p>
+                          </>
+                        );
+                      })()}
                     </div>
                     </div>
                   </>
@@ -877,14 +942,34 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                     </div>
                     <div className="flex justify-between items-center mt-auto">
                       <div className="flex items-center gap-2 min-w-0">
-                        {participantInfo?.profileImageUrl && (
-                          <img
-                            src={participantInfo.profileImageUrl}
-                            alt=""
-                            className="w-6 h-6 rounded-full flex-shrink-0 opacity-70"
-                          />
-                        )}
-                        <span className="text-lg font-bold text-gray-300 truncate">{participantInfo?.name}</span>
+                        {(() => {
+                          const sharedOwners = getSharedOwnersForEntry(num);
+                          if (sharedOwners && sharedOwners.names.length > 1) {
+                            // Shared: show all names smaller
+                            return (
+                              <div className="flex flex-wrap items-center gap-1">
+                                {sharedOwners.names.map((name, i) => (
+                                  <span key={i} className="text-xs font-medium text-gray-400">
+                                    {name}{i < sharedOwners.names.length - 1 ? "," : ""}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          }
+                          // Not shared: show single name normally
+                          return (
+                            <>
+                              {participantInfo?.profileImageUrl && (
+                                <img
+                                  src={participantInfo.profileImageUrl}
+                                  alt=""
+                                  className="w-6 h-6 rounded-full flex-shrink-0 opacity-70"
+                                />
+                              )}
+                              <span className="text-lg font-bold text-gray-300 truncate">{participantInfo?.name}</span>
+                            </>
+                          );
+                        })()}
                       </div>
                       <span className="font-mono text-lg font-bold text-white/70 flex-shrink-0 ml-2">
                         {formatDuration(entry.enteredAt, entry.eliminatedAt)}
@@ -931,16 +1016,36 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {participantInfo?.profileImageUrl && (
-                        <img
-                          src={participantInfo.profileImageUrl}
-                          alt=""
-                          className="w-6 h-6 rounded-full flex-shrink-0"
-                        />
-                      )}
-                      <p className="text-lg font-bold text-yellow-200 truncate">
-                        {participantInfo?.name}
-                      </p>
+                      {(() => {
+                        const sharedOwners = getSharedOwnersForEntry(num);
+                        if (sharedOwners && sharedOwners.names.length > 1) {
+                          // Shared: show all names smaller
+                          return (
+                            <div className="flex flex-wrap items-center gap-1">
+                              {sharedOwners.names.map((name, i) => (
+                                <span key={i} className="text-sm font-medium text-yellow-200/80">
+                                  {name}{i < sharedOwners.names.length - 1 ? "," : ""}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        }
+                        // Not shared: show single name normally
+                        return (
+                          <>
+                            {participantInfo?.profileImageUrl && (
+                              <img
+                                src={participantInfo.profileImageUrl}
+                                alt=""
+                                className="w-6 h-6 rounded-full flex-shrink-0"
+                              />
+                            )}
+                            <p className="text-lg font-bold text-yellow-200 truncate">
+                              {participantInfo?.name}
+                            </p>
+                          </>
+                        );
+                      })()}
                     </div>
                     </div>
                   </>
@@ -968,16 +1073,36 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                       {entry.wrestlerName}
                     </p>
                     <div className="flex items-center gap-2 mt-auto">
-                      {participantInfo?.profileImageUrl && (
-                        <img
-                          src={participantInfo.profileImageUrl}
-                          alt=""
-                          className="w-6 h-6 rounded-full flex-shrink-0 opacity-70"
-                        />
-                      )}
-                      <p className="text-lg font-bold text-white/50 truncate">
-                        {participantInfo?.name}
-                      </p>
+                      {(() => {
+                        const sharedOwners = getSharedOwnersForEntry(num);
+                        if (sharedOwners && sharedOwners.names.length > 1) {
+                          // Shared: show all names smaller
+                          return (
+                            <div className="flex flex-wrap items-center gap-1">
+                              {sharedOwners.names.map((name, i) => (
+                                <span key={i} className="text-sm font-medium text-white/40">
+                                  {name}{i < sharedOwners.names.length - 1 ? "," : ""}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        }
+                        // Not shared: show single name normally
+                        return (
+                          <>
+                            {participantInfo?.profileImageUrl && (
+                              <img
+                                src={participantInfo.profileImageUrl}
+                                alt=""
+                                className="w-6 h-6 rounded-full flex-shrink-0 opacity-70"
+                              />
+                            )}
+                            <p className="text-lg font-bold text-white/50 truncate">
+                              {participantInfo?.name}
+                            </p>
+                          </>
+                        );
+                      })()}
                     </div>
                     </div>
                   </>
