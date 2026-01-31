@@ -110,6 +110,67 @@ export async function GET(
   }
 }
 
+// PATCH /api/parties/[id] - Update party settings (host only, LOBBY status only)
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const body = await request.json();
+    const { distributionMode } = body;
+
+    // Validate distributionMode
+    const validModes = ["EXCLUDE", "BUY_EXTRA", "SHARED"];
+    if (!distributionMode || !validModes.includes(distributionMode)) {
+      return NextResponse.json(
+        { error: "Invalid distribution mode" },
+        { status: 400 }
+      );
+    }
+
+    const party = await prisma.party.findUnique({
+      where: { id },
+    });
+
+    if (!party) {
+      return NextResponse.json({ error: "Party not found" }, { status: 404 });
+    }
+
+    if (party.hostId !== session.user.id) {
+      return NextResponse.json(
+        { error: "Only the host can update party settings" },
+        { status: 403 }
+      );
+    }
+
+    if (party.status !== "LOBBY") {
+      return NextResponse.json(
+        { error: "Can only change settings before the party starts" },
+        { status: 400 }
+      );
+    }
+
+    const updatedParty = await prisma.party.update({
+      where: { id },
+      data: { distributionMode },
+    });
+
+    return NextResponse.json({
+      id: updatedParty.id,
+      distributionMode: updatedParty.distributionMode,
+    });
+  } catch (error) {
+    console.error("Error updating party:", error);
+    return NextResponse.json({ error: "Failed to update party" }, { status: 500 });
+  }
+}
+
 // DELETE /api/parties/[id] - Delete party (host only)
 export async function DELETE(
   request: Request,

@@ -20,6 +20,8 @@ import { Header } from "@/components/Header";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ScoreboardDropdown } from "@/components/ScoreboardDropdown";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 
 type DistributionMode = "EXCLUDE" | "BUY_EXTRA" | "SHARED";
 
@@ -91,6 +93,8 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
   const [updatingPayment, setUpdatingPayment] = useState<string | null>(null);
   const [selectedExtras, setSelectedExtras] = useState<Map<number, string>>(new Map());
   const [assigningExtra, setAssigningExtra] = useState<number | null>(null);
+  const [distributionMode, setDistributionMode] = useState<DistributionMode>("EXCLUDE");
+  const [updatingDistributionMode, setUpdatingDistributionMode] = useState(false);
 
   const fetchParty = useCallback(async () => {
     try {
@@ -118,6 +122,13 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
     const interval = setInterval(fetchParty, 5000);
     return () => clearInterval(interval);
   }, [fetchParty]);
+
+  // Sync distribution mode state when party data changes
+  useEffect(() => {
+    if (party?.distributionMode) {
+      setDistributionMode(party.distributionMode);
+    }
+  }, [party?.distributionMode]);
 
   const handleRemoveParticipant = async (participantId: string) => {
     setRemovingParticipant(participantId);
@@ -229,6 +240,33 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
     } finally {
       setDeleting(false);
       setDeleteDialogOpen(false);
+    }
+  };
+
+  const handleDistributionModeChange = async (value: string) => {
+    const newMode = value as DistributionMode;
+    setDistributionMode(newMode);
+    setUpdatingDistributionMode(true);
+    try {
+      const res = await fetch(`/api/parties/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ distributionMode: newMode }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || "Failed to update distribution mode");
+        // Revert to previous value
+        if (party) setDistributionMode(party.distributionMode);
+        return;
+      }
+      toast.success("Distribution mode updated");
+      fetchParty();
+    } catch {
+      toast.error("Failed to update distribution mode");
+      if (party) setDistributionMode(party.distributionMode);
+    } finally {
+      setUpdatingDistributionMode(false);
     }
   };
 
@@ -365,6 +403,66 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Party Settings - Only in LOBBY */}
+        {party.status === "LOBBY" && (
+          <Card className="bg-gray-800/50 border-gray-700 mb-8">
+            <CardHeader>
+              <CardTitle className="text-white">Party Settings</CardTitle>
+              <CardDescription className="text-gray-400">
+                Change these settings before starting the party
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Label className="text-white mb-3 block">Number Distribution Mode</Label>
+              <RadioGroup
+                value={distributionMode}
+                onValueChange={handleDistributionModeChange}
+                disabled={updatingDistributionMode}
+                className="space-y-3"
+              >
+                <div className="flex items-start space-x-3 p-3 rounded-lg bg-gray-900/50 border border-gray-700 cursor-pointer hover:border-purple-500/50 transition-colors">
+                  <RadioGroupItem value="EXCLUDE" id="exclude" className="border-gray-600 text-purple-600 mt-0.5" />
+                  <div className="flex-1">
+                    <Label htmlFor="exclude" className="text-white cursor-pointer font-medium">
+                      Equal Only (Recommended)
+                    </Label>
+                    <p className="text-gray-400 text-sm mt-1">
+                      Numbers that don&apos;t divide evenly are not in play. Everyone gets the same count.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-3 p-3 rounded-lg bg-gray-900/50 border border-gray-700 cursor-pointer hover:border-purple-500/50 transition-colors">
+                  <RadioGroupItem value="BUY_EXTRA" id="buy-extra" className="border-gray-600 text-purple-600 mt-0.5" />
+                  <div className="flex-1">
+                    <Label htmlFor="buy-extra" className="text-white cursor-pointer font-medium">
+                      Buy Extra Entries
+                    </Label>
+                    <p className="text-gray-400 text-sm mt-1">
+                      Remainder numbers can be purchased by players. Host assigns them manually.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-3 p-3 rounded-lg bg-gray-900/50 border border-gray-700 cursor-pointer hover:border-purple-500/50 transition-colors">
+                  <RadioGroupItem value="SHARED" id="shared" className="border-gray-600 text-purple-600 mt-0.5" />
+                  <div className="flex-1">
+                    <Label htmlFor="shared" className="text-white cursor-pointer font-medium">
+                      Shared Numbers
+                    </Label>
+                    <p className="text-gray-400 text-sm mt-1">
+                      Remainder numbers are shared by random groups. If shared number wins, they split the prize.
+                    </p>
+                  </div>
+                </div>
+              </RadioGroup>
+              {updatingDistributionMode && (
+                <p className="text-purple-400 text-sm mt-3">Updating...</p>
+              )}
             </CardContent>
           </Card>
         )}
