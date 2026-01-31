@@ -109,7 +109,8 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
   const [entrancePhase, setEntrancePhase] = useState<"showing" | "shrinking" | null>(null);
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const entranceOverlayRef = useRef<HTMLDivElement>(null);
-
+  const shrinkTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const clearTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Track previous entries for detecting changes
   const prevEntriesRef = useRef<Entry[]>([]);
@@ -277,20 +278,28 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
     setEntrancePhase("showing");
 
     // After 3 seconds, transition to shrinking phase
-    const shrinkTimer = setTimeout(() => {
+    shrinkTimerRef.current = setTimeout(() => {
       setEntrancePhase("shrinking");
 
       // After shrink animation (800ms), clear and show card glow
-      const clearTimer = setTimeout(() => {
+      clearTimerRef.current = setTimeout(() => {
         setLatestEntryId(nextEntrance.entry.id);
         setCurrentEntrance(null);
         setEntrancePhase(null);
       }, 800);
-
-      return () => clearTimeout(clearTimer);
     }, 3000);
 
-    return () => clearTimeout(shrinkTimer);
+    // Proper cleanup of both timers
+    return () => {
+      if (shrinkTimerRef.current) {
+        clearTimeout(shrinkTimerRef.current);
+        shrinkTimerRef.current = null;
+      }
+      if (clearTimerRef.current) {
+        clearTimeout(clearTimerRef.current);
+        clearTimerRef.current = null;
+      }
+    };
   }, [entranceQueue, currentEntrance]);
 
   // Helper to format duration as MM:SS
@@ -537,7 +546,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
       {currentEntrance && entrancePhase && (
         <div
           ref={entranceOverlayRef}
-          className={`fixed inset-0 z-40 flex flex-col items-center justify-center overflow-hidden ${
+          className={`fixed inset-0 z-40 flex flex-col items-center justify-center overflow-hidden bg-black/90 ${
             entrancePhase === "shrinking" ? "pointer-events-none" : ""
           }`}
           style={
