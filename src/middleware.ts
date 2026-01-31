@@ -9,7 +9,7 @@ export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/register");
-  const isPublicPage = pathname === "/" || pathname.startsWith("/join/") || pathname.match(/^\/party\/[^/]+\/spectate$/);
+  const isPublicPage = pathname === "/" || pathname === "/join" || pathname.startsWith("/join/") || pathname.match(/^\/party\/[^/]+\/spectate$/);
   const isApiRoute = pathname.startsWith("/api");
 
   // Allow API routes to handle their own auth
