@@ -80,7 +80,7 @@ export async function PATCH(
     // If marking as eliminated
     if (eliminatedBy !== undefined) {
       updateData.eliminatedBy = eliminatedBy || null;
-      updateData.eliminatedAt = eliminatedBy ? new Date() : null;
+      updateData.eliminatedAt = new Date();
     }
 
     // If declaring winner
@@ -105,7 +105,7 @@ export async function PATCH(
     });
 
     // Check if auto-winner should be declared after elimination
-    if (eliminatedBy !== undefined && eliminatedBy) {
+    if (eliminatedBy !== undefined) {
       // Get all entries to check remaining active wrestlers
       const allEntries = await prisma.rumbleEntry.findMany({
         where: { eventId },
