@@ -93,6 +93,23 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
   const [skullAnimatingEntries, setSkullAnimatingEntries] = useState<Set<string>>(new Set());
   const [latestEntryId, setLatestEntryId] = useState<string | null>(null);
 
+  // Entrance announcement animation state
+  const [entranceQueue, setEntranceQueue] = useState<Array<{
+    entry: Entry;
+    participantName: string;
+    participantImageUrl?: string | null;
+    entryNumber: number;
+  }>>([]);
+  const [currentEntrance, setCurrentEntrance] = useState<{
+    entry: Entry;
+    participantName: string;
+    participantImageUrl?: string | null;
+    targetPosition: { x: number; y: number };
+  } | null>(null);
+  const [entrancePhase, setEntrancePhase] = useState<"showing" | "shrinking" | null>(null);
+  const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const entranceOverlayRef = useRef<HTMLDivElement>(null);
+
 
   // Track previous entries for detecting changes
   const prevEntriesRef = useRef<Entry[]>([]);
@@ -167,7 +184,14 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
 
         // New entry (wrestler just entered)
         if (entry.wrestlerName && (!prevEntry || !prevEntry.wrestlerName)) {
-          setLatestEntryId(entry.id);
+          const participantInfo = getParticipantInfoForEntry(entry.entryNumber);
+          // Add to entrance queue
+          setEntranceQueue(prev => [...prev, {
+            entry,
+            participantName: participantInfo?.name || "Unknown",
+            participantImageUrl: participantInfo?.profileImageUrl,
+            entryNumber: entry.entryNumber,
+          }]);
         }
 
         // New elimination - trigger skull animation
@@ -208,7 +232,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
 
     // Update prev entries reference
     prevEntriesRef.current = entries;
-  }, [party]);
+  }, [party, getParticipantInfoForEntry]);
 
   // Poll for updates every 3 seconds
   useEffect(() => {
@@ -216,6 +240,58 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
     const interval = setInterval(fetchParty, 3000);
     return () => clearInterval(interval);
   }, [fetchParty]);
+
+  // Process entrance queue - start next entrance when not currently animating
+  useEffect(() => {
+    if (entranceQueue.length === 0 || currentEntrance !== null) return;
+
+    const nextEntrance = entranceQueue[0];
+    const cardRef = cardRefs.current.get(nextEntrance.entryNumber);
+
+    // Calculate target position for shrink animation
+    let targetX = 0;
+    let targetY = 0;
+
+    if (cardRef && entranceOverlayRef.current) {
+      const cardRect = cardRef.getBoundingClientRect();
+      const overlayRect = entranceOverlayRef.current.getBoundingClientRect();
+
+      // Calculate center of card relative to overlay center
+      const cardCenterX = cardRect.left + cardRect.width / 2;
+      const cardCenterY = cardRect.top + cardRect.height / 2;
+      const overlayCenterX = overlayRect.left + overlayRect.width / 2;
+      const overlayCenterY = overlayRect.top + overlayRect.height / 2;
+
+      targetX = cardCenterX - overlayCenterX;
+      targetY = cardCenterY - overlayCenterY;
+    }
+
+    // Remove from queue and start showing
+    setEntranceQueue(prev => prev.slice(1));
+    setCurrentEntrance({
+      entry: nextEntrance.entry,
+      participantName: nextEntrance.participantName,
+      participantImageUrl: nextEntrance.participantImageUrl,
+      targetPosition: { x: targetX, y: targetY },
+    });
+    setEntrancePhase("showing");
+
+    // After 3 seconds, transition to shrinking phase
+    const shrinkTimer = setTimeout(() => {
+      setEntrancePhase("shrinking");
+
+      // After shrink animation (800ms), clear and show card glow
+      const clearTimer = setTimeout(() => {
+        setLatestEntryId(nextEntrance.entry.id);
+        setCurrentEntrance(null);
+        setEntrancePhase(null);
+      }, 800);
+
+      return () => clearTimeout(clearTimer);
+    }, 3000);
+
+    return () => clearTimeout(shrinkTimer);
+  }, [entranceQueue, currentEntrance]);
 
   // Helper to format duration as MM:SS
   const formatDuration = useCallback((enteredAt: string | null, eliminatedAt: string | null): string => {
@@ -457,6 +533,93 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
+      {/* Wrestler Entrance Announcement Overlay */}
+      {currentEntrance && entrancePhase && (
+        <div
+          ref={entranceOverlayRef}
+          className={`fixed inset-0 z-40 flex flex-col items-center justify-center overflow-hidden ${
+            entrancePhase === "shrinking" ? "pointer-events-none" : ""
+          }`}
+          style={
+            entrancePhase === "shrinking"
+              ? {
+                  animation: "entranceShrinkToCard 0.8s ease-in forwards",
+                  "--target-x": `${currentEntrance.targetPosition.x}px`,
+                  "--target-y": `${currentEntrance.targetPosition.y}px`,
+                } as React.CSSProperties
+              : { animation: "entranceZoomIn 0.5s ease-out" }
+          }
+        >
+          {/* Dark background with radial gradient */}
+          <div className="absolute inset-0 bg-gradient-radial from-purple-900/95 via-black/95 to-black/98" />
+
+          {/* Animated spotlight pulse */}
+          <div
+            className="absolute inset-0 bg-gradient-radial from-yellow-500/20 via-transparent to-transparent"
+            style={{ animation: "entranceSpotlightPulse 1.5s ease-in-out infinite" }}
+          />
+
+          {/* Purple/gold gradient border effect */}
+          <div className="absolute inset-4 border-4 border-gradient-to-r from-purple-500 via-yellow-400 to-purple-500 rounded-3xl opacity-30" />
+
+          {/* Content container */}
+          <div className="relative z-10 flex flex-col items-center text-center px-8">
+            {/* Entry number badge */}
+            <div className="mb-6">
+              <span className="text-6xl font-black text-yellow-400 drop-shadow-[0_0_20px_rgba(234,179,8,0.8)]">
+                #{currentEntrance.entry.entryNumber}
+              </span>
+            </div>
+
+            {/* Wrestler image - large circular portrait */}
+            {currentEntrance.entry.wrestlerImageUrl && (
+              <div className="mb-8">
+                <div className="w-48 h-48 rounded-full overflow-hidden ring-4 ring-yellow-400 shadow-[0_0_60px_rgba(234,179,8,0.6)] bg-gray-800">
+                  <img
+                    src={getProxiedImageUrl(currentEntrance.entry.wrestlerImageUrl) || ""}
+                    alt={currentEntrance.entry.wrestlerName || ""}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Wrestler name - large bold text */}
+            <h2 className="text-7xl font-black text-white mb-6 drop-shadow-[0_0_30px_rgba(255,255,255,0.5)] tracking-tight">
+              {currentEntrance.entry.wrestlerName}
+            </h2>
+
+            {/* Player section */}
+            <div className="flex flex-col items-center gap-3 mb-8">
+              <span className="text-2xl text-yellow-400/80 font-medium">Drafted by</span>
+              <div className="flex items-center gap-4">
+                {currentEntrance.participantImageUrl && (
+                  <img
+                    src={currentEntrance.participantImageUrl}
+                    alt=""
+                    className="w-16 h-16 rounded-full ring-2 ring-yellow-400/60"
+                  />
+                )}
+                <span className="text-4xl font-bold text-yellow-300">
+                  {currentEntrance.participantName}
+                </span>
+              </div>
+            </div>
+
+            {/* "HAS ENTERED THE RING!" text with animation */}
+            <p
+              className="text-3xl font-bold text-white/90 tracking-widest uppercase"
+              style={{ animation: "entranceTextExpand 2s ease-in-out infinite" }}
+            >
+              Has Entered The Ring!
+            </p>
+          </div>
+        </div>
+      )}
+
       {party.status === "LOBBY" ? (
         // Lobby view - show invite code and QR prominently
         <div className="flex-1 flex flex-col items-center justify-center">
@@ -569,6 +732,9 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
             return (
               <div
                 key={num}
+                ref={(el) => {
+                  if (el) cardRefs.current.set(num, el);
+                }}
                 className={`rounded-lg p-2 flex flex-col relative ${cardClasses} ${animationClass} transition-all duration-300`}
               >
                 {/* Skull overlay for elimination animation */}

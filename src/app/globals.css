@@ -394,6 +394,54 @@
   }
 }
 
+/* Wrestler Entrance Announcement Animations */
+
+/* Full-screen entrance zoom in */
+@keyframes entranceZoomIn {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Entrance overlay shrink to card position */
+@keyframes entranceShrinkToCard {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--target-x), var(--target-y)) scale(0.05);
+    opacity: 0;
+  }
+}
+
+/* Spotlight pulse for entrance */
+@keyframes entranceSpotlightPulse {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Text tracking animation */
+@keyframes entranceTextExpand {
+  0%, 100% {
+    letter-spacing: 0.3em;
+    opacity: 0.8;
+  }
+  50% {
+    letter-spacing: 0.5em;
+    opacity: 1;
+  }
+}
+
 /* Full-Screen Floating Name Replay Animations */
 
 /* Floating name entrance - pop in with scale */
