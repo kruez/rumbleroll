@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
+import { getProxiedImageUrl } from "@/utils/imageProxy";
 
 interface WrestlerResult {
   id: string;
@@ -255,7 +256,7 @@ export function WrestlerAutocomplete({
               <div className="flex-shrink-0 w-10 h-10 rounded-full overflow-hidden bg-gray-700">
                 {wrestler.imageUrl ? (
                   <img
-                    src={wrestler.imageUrl}
+                    src={getProxiedImageUrl(wrestler.imageUrl) || undefined}
                     alt={wrestler.name}
                     className="w-full h-full object-cover"
                     onError={(e) => {
