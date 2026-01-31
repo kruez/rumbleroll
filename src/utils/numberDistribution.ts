@@ -96,22 +96,40 @@ export function distributeNumbers(
   });
 
   if (mode === "EXCLUDE" || mode === "BUY_EXTRA") {
-    // Process full tiers: each player gets exactly 1 from each
-    const fullTiers = tiers.filter(t => t.length === numParticipants);
-    const partialTier = tiers.find(t => t.length < numParticipants);
+    const numUnassigned = remainder;
 
-    // For each full tier, randomly assign 1 number to each player
-    for (const tier of fullTiers) {
-      const shuffledTier = shuffle([...tier]);
-      const shuffledPlayers = shuffle([...shuffledParticipants]);
-      shuffledPlayers.forEach((player, i) => {
-        result.owned.get(player)!.push(shuffledTier[i]);
-      });
-    }
+    if (numUnassigned === 0) {
+      // Perfect division - no unassigned numbers
+      for (const tier of tiers) {
+        const shuffledTier = shuffle([...tier]);
+        const shuffledPlayers = shuffle([...shuffledParticipants]);
+        shuffledPlayers.forEach((player, i) => {
+          result.owned.get(player)!.push(shuffledTier[i]);
+        });
+      }
+    } else {
+      // Randomly select which numbers will be unassigned (from all 30)
+      const allNumbers = shuffle(Array.from({ length: 30 }, (_, i) => i + 1));
+      const unassignedNumbers = allNumbers.slice(0, numUnassigned);
+      const ownedNumbers = allNumbers.slice(numUnassigned);
 
-    // Partial tier numbers become unassigned
-    if (partialTier) {
-      result.unassigned = [...partialTier].sort((a, b) => a - b);
+      // Create stratified tiers from the owned numbers
+      const sortedOwnedNumbers = ownedNumbers.sort((a, b) => a - b);
+      const ownedTiers: number[][] = [];
+      for (let i = 0; i < sortedOwnedNumbers.length; i += numParticipants) {
+        const tier = sortedOwnedNumbers.slice(i, i + numParticipants);
+        ownedTiers.push(shuffle(tier));
+      }
+
+      // For each tier, randomly assign 1 number to each player
+      for (const tier of ownedTiers) {
+        const shuffledPlayers = shuffle([...shuffledParticipants]);
+        shuffledPlayers.forEach((player, i) => {
+          result.owned.get(player)!.push(tier[i]);
+        });
+      }
+
+      result.unassigned = unassignedNumbers.sort((a, b) => a - b);
     }
 
     // Sort each player's numbers
