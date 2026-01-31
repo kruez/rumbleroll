@@ -109,8 +109,6 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
   const [entrancePhase, setEntrancePhase] = useState<"showing" | "shrinking" | null>(null);
   const cardRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const entranceOverlayRef = useRef<HTMLDivElement>(null);
-  const shrinkTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const clearTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Track previous entries for detecting changes
   const prevEntriesRef = useRef<Entry[]>([]);
@@ -242,7 +240,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
     return () => clearInterval(interval);
   }, [fetchParty]);
 
-  // Process entrance queue - start next entrance when not currently animating
+  // Effect 1: Pop from queue and start entrance (no timers here)
   useEffect(() => {
     if (entranceQueue.length === 0 || currentEntrance !== null) return;
 
@@ -276,31 +274,27 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
       targetPosition: { x: targetX, y: targetY },
     });
     setEntrancePhase("showing");
+  }, [entranceQueue, currentEntrance]);
 
-    // After 3 seconds, transition to shrinking phase
-    shrinkTimerRef.current = setTimeout(() => {
+  // Effect 2: Timer sequence for animation phases (only depends on currentEntrance)
+  useEffect(() => {
+    if (!currentEntrance) return;
+
+    const shrinkTimer = setTimeout(() => {
       setEntrancePhase("shrinking");
-
-      // After shrink animation (800ms), clear and show card glow
-      clearTimerRef.current = setTimeout(() => {
-        setLatestEntryId(nextEntrance.entry.id);
-        setCurrentEntrance(null);
-        setEntrancePhase(null);
-      }, 800);
     }, 3000);
 
-    // Proper cleanup of both timers
+    const clearTimer = setTimeout(() => {
+      setLatestEntryId(currentEntrance.entry.id);
+      setCurrentEntrance(null);
+      setEntrancePhase(null);
+    }, 3800);
+
     return () => {
-      if (shrinkTimerRef.current) {
-        clearTimeout(shrinkTimerRef.current);
-        shrinkTimerRef.current = null;
-      }
-      if (clearTimerRef.current) {
-        clearTimeout(clearTimerRef.current);
-        clearTimerRef.current = null;
-      }
+      clearTimeout(shrinkTimer);
+      clearTimeout(clearTimer);
     };
-  }, [entranceQueue]);
+  }, [currentEntrance]);
 
   // Helper to format duration as MM:SS
   const formatDuration = useCallback((enteredAt: string | null, eliminatedAt: string | null): string => {

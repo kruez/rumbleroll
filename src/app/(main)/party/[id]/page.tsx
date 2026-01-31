@@ -353,40 +353,23 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                             {party.participants.filter(p => p.hasPaid).length}/{party.participants.length} paid
                           </p>
                         )}
-                        {party.event.status === "NOT_STARTED" ? (
-                          <>
-                            <div className="mt-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/50">
-                              <p className="text-blue-400 text-sm">
-                                Party will auto-start when the event begins
-                              </p>
-                            </div>
-                            <Button
-                              onClick={handleStartParty}
-                              disabled={distributing || party.participants.length === 0}
-                              className="bg-green-600 hover:bg-green-700 mt-4"
-                              size="lg"
-                            >
-                              {distributing ? "Starting..." : "Start Early"}
-                            </Button>
-                          </>
-                        ) : (
-                          <Button
-                            onClick={handleStartParty}
-                            disabled={distributing || party.participants.length === 0}
-                            className="bg-green-600 hover:bg-green-700 mt-4"
-                            size="lg"
-                          >
-                            {distributing ? "Starting..." : "Start Party"}
-                          </Button>
-                        )}
+                        <div className="mt-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/50">
+                          <p className="text-blue-400 text-sm">
+                            Click below when ready to distribute numbers
+                          </p>
+                        </div>
+                        <Button
+                          onClick={handleStartParty}
+                          disabled={distributing || party.participants.length === 0}
+                          className="bg-green-600 hover:bg-green-700 mt-4"
+                          size="lg"
+                        >
+                          {distributing ? "Starting..." : "Start Party"}
+                        </Button>
                       </>
                     ) : (
                       <>
-                        {party.event.status === "NOT_STARTED" ? (
-                          <p className="text-gray-400 mb-2">Party will start when the event begins</p>
-                        ) : (
-                          <p className="text-gray-400 mb-2">Waiting for host to start the game...</p>
-                        )}
+                        <p className="text-gray-400 mb-2">Waiting for host to distribute numbers...</p>
                         <p className="text-gray-500 text-sm">{party.participants.length} participant{party.participants.length !== 1 ? "s" : ""} have joined</p>
                         {/* Payment reminder for participants */}
                         {party.entryFee && party.entryFee > 0 && myParticipant && !myParticipant.hasPaid && (
