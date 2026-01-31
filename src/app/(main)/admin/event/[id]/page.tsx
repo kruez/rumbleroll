@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ImageSearchDialog } from "@/components/ui/image-search-dialog";
 
 interface RumbleEntry {
   id: string;
@@ -71,6 +72,9 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
   const [quickAddBrand, setQuickAddBrand] = useState("");
   const [quickAdding, setQuickAdding] = useState(false);
   const [quickAddEntryNumber, setQuickAddEntryNumber] = useState<number | null>(null);
+
+  // Image search state for quick-add
+  const [quickAddImageSearchOpen, setQuickAddImageSearchOpen] = useState(false);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -927,13 +931,24 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
             </div>
             <div className="space-y-2">
               <Label htmlFor="quickAddImageUrl" className="text-white">Image URL (optional)</Label>
-              <Input
-                id="quickAddImageUrl"
-                value={quickAddImageUrl}
-                onChange={(e) => setQuickAddImageUrl(e.target.value)}
-                placeholder="https://..."
-                className="bg-gray-700 border-gray-600 text-white"
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="quickAddImageUrl"
+                  value={quickAddImageUrl}
+                  onChange={(e) => setQuickAddImageUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="bg-gray-700 border-gray-600 text-white flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setQuickAddImageSearchOpen(true)}
+                  disabled={!quickAddName.trim()}
+                  className="border-gray-500 text-gray-300 hover:bg-gray-600"
+                >
+                  Search
+                </Button>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="quickAddBrand" className="text-white">Brand (optional)</Label>
@@ -964,6 +979,15 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Image Search Dialog for Quick Add */}
+      <ImageSearchDialog
+        open={quickAddImageSearchOpen}
+        onOpenChange={setQuickAddImageSearchOpen}
+        onSelect={(url) => setQuickAddImageUrl(url)}
+        source="wrestlers"
+        initialQuery={quickAddName}
+      />
     </div>
   );
 }

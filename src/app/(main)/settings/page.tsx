@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Header } from "@/components/Header";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ImageSearchDialog } from "@/components/ui/image-search-dialog";
 import { toast } from "sonner";
 
 interface UserProfile {
@@ -60,6 +61,7 @@ export default function SettingsPage() {
   const [profileImageUrl, setProfileImageUrl] = useState("");
   const [bio, setBio] = useState("");
   const [selectedAvatarStyle, setSelectedAvatarStyle] = useState<string>("avataaars");
+  const [imageSearchOpen, setImageSearchOpen] = useState(false);
 
   useEffect(() => {
     fetchProfile();
@@ -257,15 +259,32 @@ export default function SettingsPage() {
               {/* Custom URL Input */}
               <div className="space-y-2">
                 <Label htmlFor="profileImageUrl" className="text-white">Or Use Custom Image URL</Label>
-                <Input
-                  id="profileImageUrl"
-                  placeholder="https://example.com/your-image.jpg"
-                  value={profileImageUrl}
-                  onChange={(e) => setProfileImageUrl(e.target.value)}
-                  className="bg-gray-900 border-gray-600 text-white"
-                />
-                <p className="text-gray-500 text-sm">Enter a direct link to use your own image</p>
+                <div className="flex gap-2">
+                  <Input
+                    id="profileImageUrl"
+                    placeholder="https://example.com/your-image.jpg"
+                    value={profileImageUrl}
+                    onChange={(e) => setProfileImageUrl(e.target.value)}
+                    className="bg-gray-900 border-gray-600 text-white flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setImageSearchOpen(true)}
+                    className="bg-transparent border-gray-600 text-gray-300 hover:bg-gray-700"
+                  >
+                    Search Images
+                  </Button>
+                </div>
+                <p className="text-gray-500 text-sm">Enter a direct link or search for stock photos</p>
               </div>
+
+              <ImageSearchDialog
+                open={imageSearchOpen}
+                onOpenChange={setImageSearchOpen}
+                onSelect={(url) => setProfileImageUrl(url)}
+                source="pexels"
+              />
 
               <div className="space-y-2">
                 <Label htmlFor="bio" className="text-white">Bio</Label>

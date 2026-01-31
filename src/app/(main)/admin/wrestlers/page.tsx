@@ -24,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ImageSearchDialog } from "@/components/ui/image-search-dialog";
 
 interface ScrapeStats {
   source: string;
@@ -62,6 +63,11 @@ export default function WrestlerManagementPage() {
   const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
   const [deactivatingWrestler, setDeactivatingWrestler] = useState<{ id: string; name: string } | null>(null);
   const [deactivating, setDeactivating] = useState(false);
+
+  // Image search state
+  const [imageSearchOpen, setImageSearchOpen] = useState(false);
+  const [imageSearchTarget, setImageSearchTarget] = useState<"add" | "edit">("add");
+  const [imageSearchQuery, setImageSearchQuery] = useState("");
 
   useEffect(() => {
     if (status === "loading") return;
@@ -449,13 +455,28 @@ export default function WrestlerManagementPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="wrestlerImage" className="text-white">Image URL (optional)</Label>
-                <Input
-                  id="wrestlerImage"
-                  placeholder="https://..."
-                  value={newWrestlerImage}
-                  onChange={(e) => setNewWrestlerImage(e.target.value)}
-                  className="bg-gray-700 border-gray-600 text-white"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="wrestlerImage"
+                    placeholder="https://..."
+                    value={newWrestlerImage}
+                    onChange={(e) => setNewWrestlerImage(e.target.value)}
+                    className="bg-gray-700 border-gray-600 text-white flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setImageSearchTarget("add");
+                      setImageSearchQuery(newWrestlerName);
+                      setImageSearchOpen(true);
+                    }}
+                    disabled={!newWrestlerName.trim()}
+                    className="border-gray-500 text-gray-300 hover:bg-gray-600"
+                  >
+                    Search
+                  </Button>
+                </div>
               </div>
             </div>
             <div className="mt-4">
@@ -527,13 +548,28 @@ export default function WrestlerManagementPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="editImageUrl" className="text-white">Image URL</Label>
-              <Input
-                id="editImageUrl"
-                value={editImageUrl}
-                onChange={(e) => setEditImageUrl(e.target.value)}
-                placeholder="https://..."
-                className="bg-gray-700 border-gray-600 text-white"
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="editImageUrl"
+                  value={editImageUrl}
+                  onChange={(e) => setEditImageUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="bg-gray-700 border-gray-600 text-white flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setImageSearchTarget("edit");
+                    setImageSearchQuery(editName);
+                    setImageSearchOpen(true);
+                  }}
+                  disabled={!editName.trim()}
+                  className="border-gray-500 text-gray-300 hover:bg-gray-600"
+                >
+                  Search
+                </Button>
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="editBrand" className="text-white">Brand</Label>
@@ -602,6 +638,21 @@ export default function WrestlerManagementPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Image Search Dialog */}
+      <ImageSearchDialog
+        open={imageSearchOpen}
+        onOpenChange={setImageSearchOpen}
+        onSelect={(url) => {
+          if (imageSearchTarget === "add") {
+            setNewWrestlerImage(url);
+          } else {
+            setEditImageUrl(url);
+          }
+        }}
+        source="wrestlers"
+        initialQuery={imageSearchQuery}
+      />
     </div>
   );
 }
