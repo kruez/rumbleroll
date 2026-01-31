@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use, useCallback, useRef, useMemo } from "react";
 import { QRCodeSVG } from "qrcode.react";
+import { getProxiedImageUrl } from "@/utils/imageProxy";
 
 const PLAYER_COLORS = [
   // Primary bright colors (10)
@@ -1105,7 +1106,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                     {entry.wrestlerImageUrl && (
                       <div className="absolute inset-0 overflow-hidden rounded-lg">
                         <img
-                          src={entry.wrestlerImageUrl}
+                          src={getProxiedImageUrl(entry.wrestlerImageUrl) || ""}
                           alt=""
                           className="w-full h-full object-cover opacity-15 blur-[1px]"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
@@ -1124,7 +1125,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                       {entry.wrestlerImageUrl && (
                         <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-700 flex-shrink-0">
                           <img
-                            src={entry.wrestlerImageUrl}
+                            src={getProxiedImageUrl(entry.wrestlerImageUrl) || ""}
                             alt={entry.wrestlerName || ""}
                             className="w-full h-full object-cover"
                             onError={(e) => {
@@ -1159,7 +1160,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                     {entry.wrestlerImageUrl && (
                       <div className="absolute inset-0 overflow-hidden rounded-lg">
                         <img
-                          src={entry.wrestlerImageUrl}
+                          src={getProxiedImageUrl(entry.wrestlerImageUrl) || ""}
                           alt=""
                           className="w-full h-full object-cover opacity-10 blur-[1px] grayscale"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
@@ -1175,7 +1176,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                       {entry.wrestlerImageUrl && (
                         <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-700 flex-shrink-0 opacity-50 grayscale">
                           <img
-                            src={entry.wrestlerImageUrl}
+                            src={getProxiedImageUrl(entry.wrestlerImageUrl) || ""}
                             alt={entry.wrestlerName || ""}
                             className="w-full h-full object-cover"
                             onError={(e) => {
@@ -1213,7 +1214,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                     {entry.wrestlerImageUrl && (
                       <div className="absolute inset-0 overflow-hidden rounded-lg">
                         <img
-                          src={entry.wrestlerImageUrl}
+                          src={getProxiedImageUrl(entry.wrestlerImageUrl) || ""}
                           alt=""
                           className="w-full h-full object-cover opacity-20 blur-[1px]"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
@@ -1230,7 +1231,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                       {entry.wrestlerImageUrl && (
                         <div className="w-12 h-12 rounded-full overflow-hidden bg-yellow-700/50 flex-shrink-0 ring-2 ring-yellow-400">
                           <img
-                            src={entry.wrestlerImageUrl}
+                            src={getProxiedImageUrl(entry.wrestlerImageUrl) || ""}
                             alt={entry.wrestlerName || ""}
                             className="w-full h-full object-cover"
                             onError={(e) => {
@@ -1265,7 +1266,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
                     {entry.wrestlerImageUrl && (
                       <div className="absolute inset-0 overflow-hidden rounded-lg">
                         <img
-                          src={entry.wrestlerImageUrl}
+                          src={getProxiedImageUrl(entry.wrestlerImageUrl) || ""}
                           alt=""
                           className="w-full h-full object-cover opacity-15 blur-[1px]"
                           onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
