@@ -279,6 +279,23 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <main className="container mx-auto px-4 py-8">
+        {/* Auto-start info banner */}
+        {party.status === "LOBBY" && party.event.status === "NOT_STARTED" && (
+          <Card className="bg-blue-500/10 border-blue-500/50 mb-8">
+            <CardContent className="py-4">
+              <div className="flex items-center gap-3">
+                <div className="text-2xl">⚡</div>
+                <div>
+                  <p className="text-blue-400 font-medium">Auto-Start Enabled</p>
+                  <p className="text-gray-400 text-sm">
+                    This party will automatically start when the event begins. Players can continue joining until then.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Lobby State - Just the Players card, no Distribute Numbers card */}
         {party.status === "LOBBY" && (
           <Card className="bg-gray-800/50 border-gray-700 mb-8">

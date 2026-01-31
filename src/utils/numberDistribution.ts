@@ -16,9 +16,31 @@ export interface DistributionResult {
 }
 
 /**
- * Distributes numbers 1-30 among N participants based on the distribution mode.
+ * Fisher-Yates shuffle algorithm
+ */
+function shuffle<T>(array: T[]): T[] {
+  const result = [...array];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+/**
+ * Distributes numbers 1-30 among N participants using DYNAMIC STRATIFIED distribution.
  *
- * EXCLUDE: Only distribute numbers that divide evenly. Leftover numbers are unassigned.
+ * The algorithm creates tiers dynamically based on the number of participants:
+ * - For N participants getting K numbers each, creates K tiers of N numbers
+ * - This ensures EACH player gets EXACTLY 1 number from each tier
+ * - Results in perfectly balanced distribution across early, mid, and late numbers
+ *
+ * Example with 6 players (5 numbers each):
+ * - Creates 5 tiers of 6 numbers: [1-6], [7-12], [13-18], [19-24], [25-30]
+ * - Each player gets exactly 1 from each tier
+ * - Player might get: 2, 8, 15, 21, 28 (one from each range)
+ *
+ * EXCLUDE: Remainder numbers are unassigned (one from each "leftover" tier position).
  * BUY_EXTRA: Same as EXCLUDE - host can manually assign extras later.
  * SHARED: All numbers distributed. Remainders are shared by random subgroups.
  *
@@ -41,25 +63,26 @@ export function distributeNumbers(
     throw new Error("Too many participants for available numbers");
   }
 
-  // Create array of numbers 1-30
-  const numbers = Array.from({ length: totalNumbers }, (_, i) => i + 1);
-
-  // Shuffle the numbers using Fisher-Yates algorithm
-  for (let i = numbers.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
-  }
-
-  // Calculate distribution
+  // Calculate distribution counts
   const baseCount = Math.floor(totalNumbers / numParticipants);
   const remainder = totalNumbers % numParticipants;
 
-  // Shuffle participant order for fair distribution
-  const shuffledParticipants = [...participantIds];
-  for (let i = shuffledParticipants.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffledParticipants[i], shuffledParticipants[j]] = [shuffledParticipants[j], shuffledParticipants[i]];
+  // Create DYNAMIC tiers based on number RANGES
+  // For N participants, create tiers: [1-N], [N+1 to 2N], [2N+1 to 3N], etc.
+  // This ensures early numbers are in early tiers, late numbers in late tiers
+  const tiers: number[][] = [];
+  for (let tierStart = 1; tierStart <= totalNumbers; tierStart += numParticipants) {
+    const tierEnd = Math.min(tierStart + numParticipants - 1, totalNumbers);
+    const tier: number[] = [];
+    for (let n = tierStart; n <= tierEnd; n++) {
+      tier.push(n);
+    }
+    // Shuffle within each tier so specific number assignment is random
+    tiers.push(shuffle(tier));
   }
+
+  // Shuffle participants
+  const shuffledParticipants = shuffle([...participantIds]);
 
   const result: DistributionResult = {
     owned: new Map<string, number[]>(),
@@ -73,47 +96,60 @@ export function distributeNumbers(
   });
 
   if (mode === "EXCLUDE" || mode === "BUY_EXTRA") {
-    // Only distribute baseCount numbers to each participant
-    const numbersToDistribute = baseCount * numParticipants;
-    let numberIndex = 0;
+    // Process full tiers: each player gets exactly 1 from each
+    const fullTiers = tiers.filter(t => t.length === numParticipants);
+    const partialTier = tiers.find(t => t.length < numParticipants);
 
-    shuffledParticipants.forEach((participantId) => {
-      const assignedNumbers = numbers.slice(numberIndex, numberIndex + baseCount);
-      result.owned.set(participantId, assignedNumbers.sort((a, b) => a - b));
-      numberIndex += baseCount;
+    // For each full tier, randomly assign 1 number to each player
+    for (const tier of fullTiers) {
+      const shuffledTier = shuffle([...tier]);
+      const shuffledPlayers = shuffle([...shuffledParticipants]);
+      shuffledPlayers.forEach((player, i) => {
+        result.owned.get(player)!.push(shuffledTier[i]);
+      });
+    }
+
+    // Partial tier numbers become unassigned
+    if (partialTier) {
+      result.unassigned = [...partialTier].sort((a, b) => a - b);
+    }
+
+    // Sort each player's numbers
+    result.owned.forEach((numbers, participantId) => {
+      result.owned.set(participantId, numbers.sort((a, b) => a - b));
     });
 
-    // Remaining numbers are unassigned
-    result.unassigned = numbers.slice(numbersToDistribute).sort((a, b) => a - b);
   } else if (mode === "SHARED") {
-    // Distribute base numbers to everyone
-    const baseNumbers = numbers.slice(0, baseCount * numParticipants);
-    const remainderNumbers = numbers.slice(baseCount * numParticipants);
+    // Process full tiers: each player gets exactly 1 from each
+    const fullTiers = tiers.filter(t => t.length === numParticipants);
+    const partialTier = tiers.find(t => t.length < numParticipants);
 
-    let numberIndex = 0;
-    shuffledParticipants.forEach((participantId) => {
-      const assignedNumbers = baseNumbers.slice(numberIndex, numberIndex + baseCount);
-      result.owned.set(participantId, assignedNumbers.sort((a, b) => a - b));
-      numberIndex += baseCount;
+    // For each full tier, randomly assign 1 number to each player
+    for (const tier of fullTiers) {
+      const shuffledTier = shuffle([...tier]);
+      const shuffledPlayers = shuffle([...shuffledParticipants]);
+      shuffledPlayers.forEach((player, i) => {
+        result.owned.get(player)!.push(shuffledTier[i]);
+      });
+    }
+
+    // Sort each player's owned numbers
+    result.owned.forEach((numbers, participantId) => {
+      result.owned.set(participantId, numbers.sort((a, b) => a - b));
     });
 
-    // Distribute remainder numbers as shared among subgroups
-    // For N participants and R remainder numbers:
-    // - Each remainder number is shared by ceil(N/R) or floor(N/R) participants
-    if (remainder > 0) {
-      // Shuffle participants again for fair share distribution
-      const shuffledForSharing = [...shuffledParticipants];
-      for (let i = shuffledForSharing.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffledForSharing[i], shuffledForSharing[j]] = [shuffledForSharing[j], shuffledForSharing[i]];
-      }
+    // Partial tier numbers become shared
+    if (partialTier && partialTier.length > 0) {
+      const remainderNumbers = partialTier;
+
+      // Shuffle participants for fair share distribution
+      const shuffledForSharing = shuffle([...shuffledParticipants]);
 
       // Calculate how many participants share each remainder number
-      // With 7 players and 2 remainders: #29 shared by 4, #30 shared by 3
       const shareGroupSizes: number[] = [];
       let remainingParticipants = numParticipants;
-      for (let i = 0; i < remainder; i++) {
-        const remainingRemainders = remainder - i;
+      for (let i = 0; i < remainderNumbers.length; i++) {
+        const remainingRemainders = remainderNumbers.length - i;
         const shareSize = Math.ceil(remainingParticipants / remainingRemainders);
         shareGroupSizes.push(shareSize);
         remainingParticipants -= shareSize;
@@ -189,7 +225,39 @@ export function validateSharedDistribution(distribution: DistributionResult): bo
 }
 
 /**
+ * Analyzes tier distribution for a set of numbers using fixed 3-tier system.
+ * Useful for verifying stratified distribution is working correctly.
+ */
+export function analyzeTierDistribution(numbers: number[]): { tier1: number; tier2: number; tier3: number } {
+  return {
+    tier1: numbers.filter(n => n >= 1 && n <= 10).length,
+    tier2: numbers.filter(n => n >= 11 && n <= 20).length,
+    tier3: numbers.filter(n => n >= 21 && n <= 30).length,
+  };
+}
+
+/**
+ * Analyzes dynamic tier distribution for a set of numbers.
+ * Shows how many numbers fall into each tier based on participant count.
+ */
+export function analyzeDynamicTiers(numbers: number[], numParticipants: number): number[] {
+  const tierSize = numParticipants;
+  const numTiers = Math.ceil(30 / tierSize);
+  const result: number[] = [];
+
+  for (let t = 0; t < numTiers; t++) {
+    const tierStart = t * tierSize + 1;
+    const tierEnd = Math.min((t + 1) * tierSize, 30);
+    const count = numbers.filter(n => n >= tierStart && n <= tierEnd).length;
+    result.push(count);
+  }
+
+  return result;
+}
+
+/**
  * Legacy function for backward compatibility - distributes all 30 numbers
+ * Now uses stratified distribution for fairness.
  * @deprecated Use distributeNumbers with mode parameter instead
  */
 export function distributeNumbersLegacy(participantIds: string[]): Map<string, number[]> {
@@ -204,36 +272,29 @@ export function distributeNumbersLegacy(participantIds: string[]): Map<string, n
     throw new Error("Too many participants for available numbers");
   }
 
-  // Create array of numbers 1-30
-  const numbers = Array.from({ length: totalNumbers }, (_, i) => i + 1);
+  // Use stratified distribution with SHARED mode (distributes all 30)
+  // then flatten owned + shared into a simple map
+  const result = distributeNumbers(participantIds, "SHARED");
 
-  // Shuffle the numbers using Fisher-Yates algorithm
-  for (let i = numbers.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
-  }
-
-  // Calculate distribution
-  const baseCount = Math.floor(totalNumbers / numParticipants);
-  const remainder = totalNumbers % numParticipants;
-
-  // Shuffle participant order for fair remainder distribution
-  const shuffledParticipants = [...participantIds];
-  for (let i = shuffledParticipants.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffledParticipants[i], shuffledParticipants[j]] = [shuffledParticipants[j], shuffledParticipants[i]];
-  }
-
-  // Distribute numbers
+  // Convert to legacy format: merge owned and shared assignments
   const distribution = new Map<string, number[]>();
-  let numberIndex = 0;
 
-  shuffledParticipants.forEach((participantId, idx) => {
-    // Some participants get an extra number if there's a remainder
-    const count = baseCount + (idx < remainder ? 1 : 0);
-    const assignedNumbers = numbers.slice(numberIndex, numberIndex + count);
-    distribution.set(participantId, assignedNumbers.sort((a, b) => a - b));
-    numberIndex += count;
+  result.owned.forEach((numbers, participantId) => {
+    distribution.set(participantId, [...numbers]);
+  });
+
+  // Add shared numbers to each participant who shares them
+  result.shared.forEach((participantIds, entryNumber) => {
+    participantIds.forEach(participantId => {
+      const current = distribution.get(participantId) || [];
+      current.push(entryNumber);
+      distribution.set(participantId, current);
+    });
+  });
+
+  // Sort each player's numbers
+  distribution.forEach((numbers, participantId) => {
+    distribution.set(participantId, numbers.sort((a, b) => a - b));
   });
 
   return distribution;

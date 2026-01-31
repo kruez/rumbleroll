@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateInviteCode } from "@/utils/inviteCode";
+import { distributeNumbers, DistributionMode } from "@/utils/numberDistribution";
 
 // GET /api/parties - List user's parties (or all parties for an event if eventId is provided)
 export async function GET(request: Request) {
@@ -115,6 +116,87 @@ export async function POST(request: Request) {
         },
       },
     });
+
+    // If event is already IN_PROGRESS and host is participating, auto-start the party
+    if (event.status === "IN_PROGRESS" && hostParticipates) {
+      const participants = await prisma.partyParticipant.findMany({
+        where: { partyId: party.id },
+      });
+
+      // Only auto-start if there are eligible participants
+      // For paid parties created during event (edge case), the host would need to be paid
+      let eligibleParticipants = participants;
+      if (entryFee && parseFloat(entryFee) > 0) {
+        eligibleParticipants = participants.filter(p => p.hasPaid);
+      }
+
+      if (eligibleParticipants.length > 0) {
+        const participantIds = eligibleParticipants.map(p => p.id);
+        const mode = distributionMode as DistributionMode;
+        const distribution = distributeNumbers(participantIds, mode);
+
+        await prisma.$transaction(async (tx) => {
+          const assignmentsData: {
+            participantId: string;
+            entryNumber: number;
+            partyId: string;
+            isShared: boolean;
+            shareGroup: number | null;
+          }[] = [];
+
+          distribution.owned.forEach((numbers, participantId) => {
+            numbers.forEach(num => {
+              assignmentsData.push({
+                participantId,
+                entryNumber: num,
+                partyId: party.id,
+                isShared: false,
+                shareGroup: null,
+              });
+            });
+          });
+
+          let shareGroupIndex = 0;
+          distribution.shared.forEach((pIds, entryNumber) => {
+            pIds.forEach(participantId => {
+              assignmentsData.push({
+                participantId,
+                entryNumber,
+                partyId: party.id,
+                isShared: true,
+                shareGroup: shareGroupIndex,
+              });
+            });
+            shareGroupIndex++;
+          });
+
+          await tx.numberAssignment.createMany({
+            data: assignmentsData,
+          });
+
+          await tx.party.update({
+            where: { id: party.id },
+            data: { status: "NUMBERS_ASSIGNED" },
+          });
+        });
+
+        // Refetch party with updated status
+        const updatedParty = await prisma.party.findUnique({
+          where: { id: party.id },
+          include: {
+            host: { select: { id: true, name: true, email: true } },
+            event: { select: { id: true, name: true, year: true, status: true } },
+            participants: {
+              include: {
+                user: { select: { id: true, name: true, email: true } },
+              },
+            },
+          },
+        });
+
+        return NextResponse.json(updatedParty);
+      }
+    }
 
     return NextResponse.json(party);
   } catch (error) {
