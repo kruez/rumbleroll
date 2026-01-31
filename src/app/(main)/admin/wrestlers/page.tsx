@@ -465,14 +465,14 @@ export default function WrestlerManagementPage() {
                   />
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => {
                       setImageSearchTarget("add");
                       setImageSearchQuery(newWrestlerName);
                       setImageSearchOpen(true);
                     }}
                     disabled={!newWrestlerName.trim()}
-                    className="border-gray-500 text-gray-300 hover:bg-gray-600"
+                    className="bg-gray-600 text-white hover:bg-gray-500"
                   >
                     Search
                   </Button>
@@ -558,14 +558,14 @@ export default function WrestlerManagementPage() {
                 />
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                   onClick={() => {
                     setImageSearchTarget("edit");
                     setImageSearchQuery(editName);
                     setImageSearchOpen(true);
                   }}
                   disabled={!editName.trim()}
-                  className="border-gray-500 text-gray-300 hover:bg-gray-600"
+                  className="bg-gray-600 text-white hover:bg-gray-500"
                 >
                   Search
                 </Button>

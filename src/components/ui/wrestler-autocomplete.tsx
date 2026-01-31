@@ -59,7 +59,8 @@ export function WrestlerAutocomplete({
       if (res.ok) {
         const data: WrestlerResult[] = await res.json();
         setResults(data);
-        setIsOpen(data.length > 0);
+        // Open dropdown if we have results OR if allowCreate is enabled (to show "Add new" option)
+        setIsOpen(data.length > 0 || allowCreate);
         setHighlightedIndex(-1);
       }
     } catch (error) {
@@ -68,7 +69,7 @@ export function WrestlerAutocomplete({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [allowCreate]);
 
   // Handle input change with debounce
   const handleInputChange = React.useCallback(
@@ -101,10 +102,23 @@ export function WrestlerAutocomplete({
     [onChange, onSelect]
   );
 
+  // Calculate total selectable items (results + optional create button)
+  const hasCreateOption = allowCreate && onCreateRequest && value.length >= 2;
+  const totalItems = results.length + (hasCreateOption ? 1 : 0);
+  const createOptionIndex = results.length; // The "create" option is always last
+
+  // Handle create action
+  const handleCreate = React.useCallback(() => {
+    if (onCreateRequest) {
+      onCreateRequest(value);
+      setIsOpen(false);
+    }
+  }, [onCreateRequest, value]);
+
   // Keyboard navigation
   const handleKeyDown = React.useCallback(
     (e: React.KeyboardEvent) => {
-      if (!isOpen || results.length === 0) {
+      if (!isOpen || totalItems === 0) {
         if (e.key === "Escape") {
           setIsOpen(false);
         }
@@ -114,16 +128,18 @@ export function WrestlerAutocomplete({
       switch (e.key) {
         case "ArrowDown":
           e.preventDefault();
-          setHighlightedIndex((prev) => (prev < results.length - 1 ? prev + 1 : 0));
+          setHighlightedIndex((prev) => (prev < totalItems - 1 ? prev + 1 : 0));
           break;
         case "ArrowUp":
           e.preventDefault();
-          setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : results.length - 1));
+          setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : totalItems - 1));
           break;
         case "Enter":
           e.preventDefault();
           if (highlightedIndex >= 0 && highlightedIndex < results.length) {
             handleSelect(results[highlightedIndex]);
+          } else if (highlightedIndex === createOptionIndex && hasCreateOption) {
+            handleCreate();
           }
           break;
         case "Escape":
@@ -135,7 +151,7 @@ export function WrestlerAutocomplete({
           break;
       }
     },
-    [isOpen, results, highlightedIndex, handleSelect]
+    [isOpen, totalItems, results, highlightedIndex, handleSelect, handleCreate, createOptionIndex, hasCreateOption]
   );
 
   // Close dropdown when clicking outside
@@ -218,7 +234,7 @@ export function WrestlerAutocomplete({
       </div>
 
       {/* Dropdown */}
-      {isOpen && results.length > 0 && (
+      {isOpen && (results.length > 0 || hasCreateOption) && (
         <ul
           ref={listRef}
           className="absolute z-50 mt-1 w-full max-h-64 overflow-auto rounded-md border border-gray-600 bg-gray-800 shadow-lg"
@@ -263,37 +279,42 @@ export function WrestlerAutocomplete({
               </div>
             </li>
           ))}
-        </ul>
-      )}
 
-      {/* No results message with optional create button */}
-      {isOpen && results.length === 0 && value.length >= 2 && !loading && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border border-gray-600 bg-gray-800 shadow-lg">
-          {allowCreate && onCreateRequest ? (
-            <button
-              type="button"
-              onClick={() => {
-                onCreateRequest(value);
-                setIsOpen(false);
-              }}
-              className="w-full px-3 py-2 text-left text-sm text-purple-400 hover:bg-purple-600/30 transition-colors flex items-center gap-2"
+          {/* Add new wrestler option - always shown at bottom when allowCreate is true */}
+          {hasCreateOption && (
+            <li
+              onClick={handleCreate}
+              onMouseEnter={() => setHighlightedIndex(createOptionIndex)}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors border-t border-gray-700",
+                highlightedIndex === createOptionIndex
+                  ? "bg-purple-600/40"
+                  : "hover:bg-gray-700"
+              )}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                className="h-4 w-4"
+                className="h-4 w-4 text-purple-400"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
-              Add &quot;{value}&quot; to wrestler database
-            </button>
-          ) : (
-            <div className="px-3 py-2 text-sm text-gray-400">
-              No wrestlers found
-            </div>
+              <span className="text-sm text-purple-400">
+                Add &quot;{value}&quot; to wrestler database
+              </span>
+            </li>
           )}
+        </ul>
+      )}
+
+      {/* No results message when create is not allowed */}
+      {isOpen && results.length === 0 && value.length >= 2 && !loading && !hasCreateOption && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border border-gray-600 bg-gray-800 shadow-lg">
+          <div className="px-3 py-2 text-sm text-gray-400">
+            No wrestlers found
+          </div>
         </div>
       )}
     </div>
