@@ -39,8 +39,19 @@ export async function POST(
       return NextResponse.json({ error: "No participants to distribute numbers to" }, { status: 400 });
     }
 
-    // Distribute numbers
-    const participantIds = party.participants.map(p => p.id);
+    // When entry fee is set, only include paid participants
+    let eligibleParticipants = party.participants;
+    if (party.entryFee && party.entryFee > 0) {
+      eligibleParticipants = party.participants.filter(p => p.hasPaid);
+      if (eligibleParticipants.length === 0) {
+        return NextResponse.json({
+          error: "No paid participants. Mark at least one participant as paid before starting."
+        }, { status: 400 });
+      }
+    }
+
+    // Distribute numbers only to eligible participants
+    const participantIds = eligibleParticipants.map(p => p.id);
     const distribution = distributeNumbers(participantIds);
 
     // Create assignments in a transaction

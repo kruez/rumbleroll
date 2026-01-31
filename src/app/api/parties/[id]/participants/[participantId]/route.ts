@@ -2,6 +2,63 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// PATCH /api/parties/[id]/participants/[participantId] - Update participant payment status (host only)
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string; participantId: string }> }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id, participantId } = await params;
+    const body = await request.json();
+    const { hasPaid } = body;
+
+    if (typeof hasPaid !== "boolean") {
+      return NextResponse.json({ error: "hasPaid must be a boolean" }, { status: 400 });
+    }
+
+    const party = await prisma.party.findUnique({
+      where: { id },
+      include: {
+        participants: true,
+      },
+    });
+
+    if (!party) {
+      return NextResponse.json({ error: "Party not found" }, { status: 404 });
+    }
+
+    // Only host can update payment status
+    if (party.hostId !== session.user.id) {
+      return NextResponse.json({ error: "Only the host can update payment status" }, { status: 403 });
+    }
+
+    // Find the participant
+    const participant = party.participants.find(p => p.id === participantId);
+    if (!participant) {
+      return NextResponse.json({ error: "Participant not found" }, { status: 404 });
+    }
+
+    // Update the participant's payment status
+    const updated = await prisma.partyParticipant.update({
+      where: { id: participantId },
+      data: {
+        hasPaid,
+        paidAt: hasPaid ? new Date() : null,
+      },
+    });
+
+    return NextResponse.json({ success: true, hasPaid: updated.hasPaid, paidAt: updated.paidAt });
+  } catch (error) {
+    console.error("Error updating participant payment status:", error);
+    return NextResponse.json({ error: "Failed to update payment status" }, { status: 500 });
+  }
+}
+
 // DELETE /api/parties/[id]/participants/[participantId] - Remove participant (host only, lobby status only)
 export async function DELETE(
   request: Request,

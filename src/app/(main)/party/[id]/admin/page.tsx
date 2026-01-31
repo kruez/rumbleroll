@@ -37,6 +37,8 @@ interface Assignment {
 
 interface Participant {
   id: string;
+  hasPaid: boolean;
+  paidAt: string | null;
   user: { id: string; name: string | null; email: string; profileImageUrl?: string | null };
   assignments: Assignment[];
 }
@@ -54,6 +56,7 @@ interface Party {
   name: string;
   inviteCode: string;
   status: "LOBBY" | "NUMBERS_ASSIGNED" | "COMPLETED";
+  entryFee: number | null;
   hostId: string;
   event: RumbleEvent;
   participants: Participant[];
@@ -71,6 +74,7 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
   const [testModeLoading, setTestModeLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [updatingPayment, setUpdatingPayment] = useState<string | null>(null);
 
   const fetchParty = useCallback(async () => {
     try {
@@ -114,6 +118,28 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
       toast.error("Failed to remove participant");
     } finally {
       setRemovingParticipant(null);
+    }
+  };
+
+  const handleTogglePayment = async (participantId: string, currentStatus: boolean) => {
+    setUpdatingPayment(participantId);
+    try {
+      const res = await fetch(`/api/parties/${id}/participants/${participantId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hasPaid: !currentStatus }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || "Failed to update payment status");
+        return;
+      }
+      toast.success(currentStatus ? "Marked as unpaid" : "Marked as paid");
+      fetchParty();
+    } catch {
+      toast.error("Failed to update payment status");
+    } finally {
+      setUpdatingPayment(null);
     }
   };
 
@@ -212,8 +238,17 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
               <CardTitle className="text-white">Players ({party.participants.length})</CardTitle>
               <CardDescription className="text-gray-400">
                 Remove players before starting the game if needed.
-                Each person will get {Math.floor(30 / party.participants.length)}-{Math.ceil(30 / party.participants.length)} numbers.
+                {party.participants.length > 0 && ` Each person will get ${Math.floor(30 / party.participants.length)}-${Math.ceil(30 / party.participants.length)} numbers.`}
               </CardDescription>
+              {party.entryFee && party.entryFee > 0 && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-green-400 font-medium">${party.entryFee.toFixed(2)} entry fee</span>
+                  <span className="text-gray-500">•</span>
+                  <span className="text-gray-400 text-sm">
+                    {party.participants.filter(p => p.hasPaid).length}/{party.participants.length} paid
+                  </span>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
@@ -234,17 +269,34 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
                         <Badge variant="outline" className="text-yellow-500 border-yellow-500 text-xs">Host</Badge>
                       )}
                     </div>
-                    {p.user.id !== party.hostId && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveParticipant(p.id)}
-                        disabled={removingParticipant === p.id}
-                        className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
-                      >
-                        {removingParticipant === p.id ? "Removing..." : "Remove"}
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {/* Payment status toggle (only show if entry fee is set) */}
+                      {party.entryFee && party.entryFee > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleTogglePayment(p.id, p.hasPaid)}
+                          disabled={updatingPayment === p.id}
+                          className={p.hasPaid
+                            ? "text-green-400 hover:text-green-300 hover:bg-green-500/20"
+                            : "text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                          }
+                        >
+                          {updatingPayment === p.id ? "..." : p.hasPaid ? "✓ Paid" : "✗ Unpaid"}
+                        </Button>
+                      )}
+                      {p.user.id !== party.hostId && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemoveParticipant(p.id)}
+                          disabled={removingParticipant === p.id}
+                          className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                        >
+                          {removingParticipant === p.id ? "Removing..." : "Remove"}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

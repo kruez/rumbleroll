@@ -47,7 +47,12 @@ export async function GET(
 
     // Transform data to include assignments with each participant
     const participantsWithAssignments = party.participants.map(p => ({
-      ...p,
+      id: p.id,
+      userId: p.userId,
+      joinedAt: p.joinedAt,
+      hasPaid: p.hasPaid,
+      paidAt: p.paidAt,
+      user: p.user,
       assignments: party.assignments
         .filter(a => a.participantId === p.id)
         .map(a => ({

@@ -9,6 +9,14 @@ import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Header } from "@/components/Header";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ScoreboardDropdown } from "@/components/ScoreboardDropdown";
@@ -31,6 +39,8 @@ interface Assignment {
 
 interface Participant {
   id: string;
+  hasPaid: boolean;
+  paidAt: string | null;
   user: { id: string; name: string | null; email: string; profileImageUrl?: string | null };
   assignments: Assignment[];
 }
@@ -66,6 +76,7 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
   const [leaving, setLeaving] = useState(false);
   const [distributing, setDistributing] = useState(false);
   const [showStartMessage, setShowStartMessage] = useState(false);
+  const [confirmDistributeOpen, setConfirmDistributeOpen] = useState(false);
   const prevStatus = useRef<Party["status"] | undefined>(undefined);
 
   const fetchParty = useCallback(async () => {
@@ -119,7 +130,20 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
     }
   };
 
+  const handleStartParty = () => {
+    // Check if we need confirmation for unpaid participants
+    if (party?.entryFee && party.entryFee > 0) {
+      const unpaidCount = party.participants.filter(p => !p.hasPaid).length;
+      if (unpaidCount > 0) {
+        setConfirmDistributeOpen(true);
+        return;
+      }
+    }
+    handleDistribute();
+  };
+
   const handleDistribute = async () => {
+    setConfirmDistributeOpen(false);
     setDistributing(true);
     try {
       const res = await fetch(`/api/parties/${id}/distribute`, { method: "POST" });
@@ -135,6 +159,14 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
     } finally {
       setDistributing(false);
     }
+  };
+
+  const handleCopySpectatorLink = () => {
+    if (!party) return;
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+    const spectatorUrl = `${baseUrl}/party/${party.id}/spectate?code=${party.inviteCode}`;
+    navigator.clipboard.writeText(spectatorUrl);
+    toast.success("Spectator link copied!");
   };
 
   if (loading) {
@@ -276,8 +308,13 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                     {party.isHost ? (
                       <>
                         <p className="text-gray-400 mb-2">{party.participants.length} participant{party.participants.length !== 1 ? "s" : ""} have joined</p>
+                        {party.entryFee && party.entryFee > 0 && (
+                          <p className="text-green-400 text-sm mb-2">
+                            {party.participants.filter(p => p.hasPaid).length}/{party.participants.length} paid
+                          </p>
+                        )}
                         <Button
-                          onClick={handleDistribute}
+                          onClick={handleStartParty}
                           disabled={distributing || party.participants.length === 0}
                           className="bg-green-600 hover:bg-green-700 mt-4"
                           size="lg"
@@ -289,6 +326,18 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                       <>
                         <p className="text-gray-400 mb-2">Waiting for host to start the game...</p>
                         <p className="text-gray-500 text-sm">{party.participants.length} participant{party.participants.length !== 1 ? "s" : ""} have joined</p>
+                        {/* Payment reminder for participants */}
+                        {party.entryFee && party.entryFee > 0 && myParticipant && !myParticipant.hasPaid && (
+                          <div className="mt-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/50">
+                            <p className="text-yellow-400 text-sm font-medium">Payment Required</p>
+                            <p className="text-gray-400 text-xs">Pay ${party.entryFee.toFixed(2)} to the host to receive your numbers</p>
+                          </div>
+                        )}
+                        {party.entryFee && party.entryFee > 0 && myParticipant?.hasPaid && (
+                          <div className="mt-4">
+                            <Badge className="bg-green-500">Payment Confirmed</Badge>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
@@ -403,6 +452,20 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                     ? "Share this code or scan the QR to join"
                     : "Share this code with friends to let them join"}
                 </p>
+                {/* Spectator link button */}
+                <div className="mt-4 pt-4 border-t border-gray-700">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopySpectatorLink}
+                    className="w-full bg-transparent border-purple-500 text-purple-400 hover:bg-purple-500/10"
+                  >
+                    Copy Spectator Link
+                  </Button>
+                  <p className="text-gray-500 text-xs mt-2 text-center">
+                    Share with people who want to watch without joining
+                  </p>
+                </div>
               </CardContent>
             </Card>
 
@@ -492,6 +555,42 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
           </div>
         </div>
       </main>
+
+      {/* Confirmation Dialog for Starting with Unpaid Participants */}
+      <Dialog open={confirmDistributeOpen} onOpenChange={setConfirmDistributeOpen}>
+        <DialogContent className="bg-gray-800 border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Start with Unpaid Participants?</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              {party && party.entryFee && (
+                <>
+                  {party.participants.filter(p => !p.hasPaid).length} participant{party.participants.filter(p => !p.hasPaid).length !== 1 ? "s haven't" : " hasn't"} paid the ${party.entryFee.toFixed(2)} entry fee.
+                  <br /><br />
+                  <strong className="text-yellow-400">They will not receive any numbers.</strong>
+                  <br /><br />
+                  You can go to Host Controls to mark payments as confirmed, or proceed without them.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDistributeOpen(false)}
+              className="border-gray-600 text-gray-300 hover:bg-gray-700"
+            >
+              Go Back
+            </Button>
+            <Button
+              onClick={handleDistribute}
+              disabled={distributing}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {distributing ? "Starting..." : "Proceed Anyway"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
