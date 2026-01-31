@@ -419,15 +419,15 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
                 </Badge>
               )}
 
-              {/* Reset Button for completed test events */}
-              {event.isTest && event.status === "COMPLETED" && (
+              {/* Reset Button for completed events */}
+              {event.status === "COMPLETED" && (
                 <Button
                   variant="outline"
                   onClick={handleResetEvent}
                   disabled={resetting}
                   className="border-orange-500 text-orange-400 hover:bg-orange-500/20"
                 >
-                  {resetting ? "Resetting..." : "Reset for Re-simulation"}
+                  {resetting ? "Resetting..." : "Reset Event"}
                 </Button>
               )}
 
