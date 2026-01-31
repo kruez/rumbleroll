@@ -9,7 +9,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Header } from "@/components/Header";
+
+type DistributionMode = "EXCLUDE" | "BUY_EXTRA" | "SHARED";
 
 interface RumbleEvent {
   id: string;
@@ -23,6 +26,7 @@ export default function CreatePartyPage() {
   const [name, setName] = useState("");
   const [eventId, setEventId] = useState("");
   const [hostParticipates, setHostParticipates] = useState(true);
+  const [distributionMode, setDistributionMode] = useState<DistributionMode>("EXCLUDE");
   const [hasEntryFee, setHasEntryFee] = useState(false);
   const [entryFee, setEntryFee] = useState("");
   const [events, setEvents] = useState<RumbleEvent[]>([]);
@@ -76,6 +80,7 @@ export default function CreatePartyPage() {
           name,
           eventId,
           hostParticipates,
+          distributionMode,
           entryFee: hasEntryFee && entryFee ? parseFloat(entryFee) : null,
         }),
       });
@@ -175,6 +180,51 @@ export default function CreatePartyPage() {
                   ? "You'll receive entry numbers along with other players"
                   : "You'll host the party but won't receive any entry numbers"}
               </p>
+
+              <div className="border-t border-gray-700 pt-4">
+                <Label className="text-white mb-3 block">Number Distribution Mode</Label>
+                <RadioGroup
+                  value={distributionMode}
+                  onValueChange={(value) => setDistributionMode(value as DistributionMode)}
+                  className="space-y-3"
+                >
+                  <div className="flex items-start space-x-3 p-3 rounded-lg bg-gray-900/50 border border-gray-700 cursor-pointer hover:border-purple-500/50 transition-colors">
+                    <RadioGroupItem value="EXCLUDE" id="exclude" className="border-gray-600 text-purple-600 mt-0.5" />
+                    <div className="flex-1">
+                      <Label htmlFor="exclude" className="text-white cursor-pointer font-medium">
+                        Equal Only (Recommended)
+                      </Label>
+                      <p className="text-gray-400 text-sm mt-1">
+                        Numbers that don&apos;t divide evenly are not in play. Everyone gets the same count.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-3 p-3 rounded-lg bg-gray-900/50 border border-gray-700 cursor-pointer hover:border-purple-500/50 transition-colors">
+                    <RadioGroupItem value="BUY_EXTRA" id="buy-extra" className="border-gray-600 text-purple-600 mt-0.5" />
+                    <div className="flex-1">
+                      <Label htmlFor="buy-extra" className="text-white cursor-pointer font-medium">
+                        Buy Extra Entries
+                      </Label>
+                      <p className="text-gray-400 text-sm mt-1">
+                        Remainder numbers can be purchased by players. Host assigns them manually.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start space-x-3 p-3 rounded-lg bg-gray-900/50 border border-gray-700 cursor-pointer hover:border-purple-500/50 transition-colors">
+                    <RadioGroupItem value="SHARED" id="shared" className="border-gray-600 text-purple-600 mt-0.5" />
+                    <div className="flex-1">
+                      <Label htmlFor="shared" className="text-white cursor-pointer font-medium">
+                        Shared Numbers
+                      </Label>
+                      <p className="text-gray-400 text-sm mt-1">
+                        Remainder numbers are shared by random groups. If shared number wins, they split the prize.
+                      </p>
+                    </div>
+                  </div>
+                </RadioGroup>
+              </div>
 
               <div className="border-t border-gray-700 pt-4">
                 <div className="flex items-center space-x-3 py-2">

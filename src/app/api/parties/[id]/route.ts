@@ -58,19 +58,50 @@ export async function GET(
         .map(a => ({
           id: a.id,
           entryNumber: a.entryNumber,
+          isShared: a.isShared,
+          shareGroup: a.shareGroup,
         })),
     }));
+
+    // Compute unassigned numbers (for EXCLUDE and BUY_EXTRA modes)
+    const assignedNumbers = new Set(party.assignments.map(a => a.entryNumber));
+    const unassignedNumbers: number[] = [];
+    for (let i = 1; i <= 30; i++) {
+      if (!assignedNumbers.has(i)) {
+        unassignedNumbers.push(i);
+      }
+    }
+
+    // Compute shared assignments (for SHARED mode) - group by entry number
+    const sharedAssignments: { entryNumber: number; participantIds: string[]; shareGroup: number }[] = [];
+    if (party.distributionMode === "SHARED") {
+      const sharedByEntry = new Map<number, { participantIds: string[]; shareGroup: number }>();
+      party.assignments
+        .filter(a => a.isShared && a.shareGroup !== null)
+        .forEach(a => {
+          if (!sharedByEntry.has(a.entryNumber)) {
+            sharedByEntry.set(a.entryNumber, { participantIds: [], shareGroup: a.shareGroup! });
+          }
+          sharedByEntry.get(a.entryNumber)!.participantIds.push(a.participantId);
+        });
+      sharedByEntry.forEach((data, entryNumber) => {
+        sharedAssignments.push({ entryNumber, ...data });
+      });
+    }
 
     return NextResponse.json({
       id: party.id,
       name: party.name,
       inviteCode: party.inviteCode,
       status: party.status,
+      distributionMode: party.distributionMode,
       entryFee: party.entryFee,
       hostId: party.hostId,
       host: party.host,
       event: party.event,
       participants: participantsWithAssignments,
+      unassignedNumbers,
+      sharedAssignments,
       isHost,
     });
   } catch (error) {

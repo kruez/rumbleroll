@@ -44,13 +44,14 @@ enum EventStatus {
 }
 
 model Party {
-  id          String      @id @default(cuid())
-  name        String
-  inviteCode  String      @unique
-  status      PartyStatus @default(LOBBY)
-  entryFee    Float?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id               String           @id @default(cuid())
+  name             String
+  inviteCode       String           @unique
+  status           PartyStatus      @default(LOBBY)
+  distributionMode DistributionMode @default(EXCLUDE)
+  entryFee         Float?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   hostId       String
   host         User        @relation("HostedParties", fields: [hostId], references: [id])
@@ -66,6 +67,12 @@ enum PartyStatus {
   LOBBY
   NUMBERS_ASSIGNED
   COMPLETED
+}
+
+enum DistributionMode {
+  EXCLUDE      // Remainder numbers unassigned
+  BUY_EXTRA    // Players can purchase extras (host assigns manually)
+  SHARED       // Remainder numbers have multiple owners
 }
 
 model PartyParticipant {
@@ -86,8 +93,10 @@ model PartyParticipant {
 }
 
 model NumberAssignment {
-  id          String @id @default(cuid())
-  entryNumber Int    // 1-30
+  id          String  @id @default(cuid())
+  entryNumber Int     // 1-30
+  isShared    Boolean @default(false)
+  shareGroup  Int?    // Which share group (for SHARED mode)
 
   participantId String
   participant   PartyParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
@@ -95,7 +104,8 @@ model NumberAssignment {
   partyId     String
   party       Party  @relation(fields: [partyId], references: [id], onDelete: Cascade)
 
-  @@unique([partyId, entryNumber])
+  @@unique([partyId, entryNumber, participantId])
+  @@index([partyId, entryNumber])
 }
 
 model RumbleEntry {

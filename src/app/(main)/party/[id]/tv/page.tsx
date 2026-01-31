@@ -57,7 +57,17 @@ interface Entry {
 interface Assignment {
   id: string;
   entryNumber: number;
+  isShared?: boolean;
+  shareGroup?: number | null;
 }
+
+interface SharedAssignment {
+  entryNumber: number;
+  participantIds: string[];
+  shareGroup: number;
+}
+
+type DistributionMode = "EXCLUDE" | "BUY_EXTRA" | "SHARED";
 
 interface Participant {
   id: string;
@@ -78,8 +88,11 @@ interface Party {
   name: string;
   inviteCode: string;
   status: "LOBBY" | "NUMBERS_ASSIGNED" | "COMPLETED";
+  distributionMode: DistributionMode;
   event: RumbleEvent;
   participants: Participant[];
+  unassignedNumbers: number[];
+  sharedAssignments: SharedAssignment[];
 }
 
 interface ReplayEvent {
@@ -656,6 +669,21 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
     return "Unknown";
   };
 
+  // Check if a number is shared and get all its owners
+  const getSharedOwners = (entryNumber: number): string[] | null => {
+    const sharedInfo = party.sharedAssignments.find(s => s.entryNumber === entryNumber);
+    if (!sharedInfo) return null;
+    return sharedInfo.participantIds.map(pid => {
+      const p = party.participants.find(p => p.id === pid);
+      return p?.user.name || p?.user.email.split("@")[0] || "Unknown";
+    });
+  };
+
+  // Check if a number is unassigned (excluded)
+  const isExcludedNumber = (entryNumber: number): boolean => {
+    return party.unassignedNumbers.includes(entryNumber);
+  };
+
   // Dynamic grid sizing based on wrestler count
   const getGridConfig = (count: number) => {
     if (count <= 4) return { cols: "grid-cols-2", size: "large" };
@@ -786,10 +814,21 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
             <p className="text-6xl font-black text-white mb-4 drop-shadow-[0_0_20px_rgba(255,255,255,0.5)] animate-[scaleIn_0.5s_ease-out]">
               {winner.wrestlerName}
             </p>
-            <div className="flex items-center justify-center gap-4">
-              <span className="text-3xl font-bold text-yellow-300">#{winner.entryNumber}</span>
-              <span className="text-2xl text-white">-</span>
-              <span className="text-2xl text-yellow-400 font-bold">{getParticipantForEntry(winner.entryNumber)}</span>
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex items-center justify-center gap-4">
+                <span className="text-3xl font-bold text-yellow-300">#{winner.entryNumber}</span>
+                <span className="text-2xl text-white">-</span>
+                <span className="text-2xl text-yellow-400 font-bold">{getParticipantForEntry(winner.entryNumber)}</span>
+              </div>
+              {/* Show shared owners if this was a shared number */}
+              {getSharedOwners(winner.entryNumber) && (
+                <div className="text-center mt-2">
+                  <p className="text-purple-300 text-lg flex items-center justify-center gap-2">
+                    <span className="text-xl">&#129309;</span>
+                    Shared by: {getSharedOwners(winner.entryNumber)!.join(", ")}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1025,18 +1064,31 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
               <div className="grid grid-cols-10 gap-2">
                 {Array.from({ length: 30 }, (_, i) => i + 1).map((num) => {
                   const entry = entries.find((e) => e.entryNumber === num);
+                  const isExcluded = isExcludedNumber(num);
+                  const isShared = getSharedOwners(num) !== null;
                   let bgColor = "bg-gray-700";
                   let textColor = "text-gray-400";
+                  let borderStyle = "";
+
+                  // Handle excluded numbers (not in play)
+                  if (isExcluded) {
+                    bgColor = "bg-gray-800";
+                    textColor = "text-gray-600";
+                  }
+                  // Handle shared numbers (dashed border)
+                  else if (isShared) {
+                    borderStyle = "border-2 border-dashed border-purple-500";
+                  }
 
                   if (entry) {
                     if (entry.isWinner) {
                       bgColor = "bg-yellow-500";
                       textColor = "text-black";
                     } else if (entry.eliminatedAt) {
-                      bgColor = "bg-red-600/50";
+                      bgColor = isShared ? "bg-red-600/30" : "bg-red-600/50";
                       textColor = "text-red-300";
                     } else if (entry.wrestlerName) {
-                      bgColor = "bg-green-500";
+                      bgColor = isShared ? "bg-green-500/70" : "bg-green-500";
                       textColor = "text-white";
                     }
                   }
@@ -1044,7 +1096,8 @@ export default function TVDisplayPage({ params }: { params: Promise<{ id: string
                   return (
                     <div
                       key={num}
-                      className={`${bgColor} ${textColor} rounded-lg p-2 text-center font-bold text-lg aspect-square flex items-center justify-center`}
+                      className={`${bgColor} ${textColor} ${borderStyle} rounded-lg p-2 text-center font-bold text-lg aspect-square flex items-center justify-center`}
+                      title={isExcluded ? "Not in play" : isShared ? "Shared number" : undefined}
                     >
                       {num}
                     </div>

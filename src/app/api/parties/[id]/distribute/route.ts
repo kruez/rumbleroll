@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { distributeNumbers } from "@/utils/numberDistribution";
+import { distributeNumbers, DistributionMode } from "@/utils/numberDistribution";
 
 // POST /api/parties/[id]/distribute - Distribute numbers to participants (host only)
 export async function POST(
@@ -50,22 +50,48 @@ export async function POST(
       }
     }
 
-    // Distribute numbers only to eligible participants
+    // Distribute numbers only to eligible participants using the party's distribution mode
     const participantIds = eligibleParticipants.map(p => p.id);
-    const distribution = distributeNumbers(participantIds);
+    const mode = party.distributionMode as DistributionMode;
+    const distribution = distributeNumbers(participantIds, mode);
 
     // Create assignments in a transaction
     await prisma.$transaction(async (tx) => {
       // Build all assignment data
-      const assignmentsData: { participantId: string; entryNumber: number; partyId: string }[] = [];
-      distribution.forEach((numbers, participantId) => {
+      const assignmentsData: {
+        participantId: string;
+        entryNumber: number;
+        partyId: string;
+        isShared: boolean;
+        shareGroup: number | null;
+      }[] = [];
+
+      // Add owned (non-shared) assignments
+      distribution.owned.forEach((numbers, participantId) => {
         numbers.forEach(num => {
           assignmentsData.push({
             participantId,
             entryNumber: num,
             partyId: party.id,
+            isShared: false,
+            shareGroup: null,
           });
         });
+      });
+
+      // Add shared assignments (for SHARED mode)
+      let shareGroupIndex = 0;
+      distribution.shared.forEach((participantIds, entryNumber) => {
+        participantIds.forEach(participantId => {
+          assignmentsData.push({
+            participantId,
+            entryNumber,
+            partyId: party.id,
+            isShared: true,
+            shareGroup: shareGroupIndex,
+          });
+        });
+        shareGroupIndex++;
       });
 
       // Create all assignments at once
@@ -80,7 +106,18 @@ export async function POST(
       });
     });
 
-    return NextResponse.json({ success: true });
+    // Return info about the distribution
+    const numParticipants = eligibleParticipants.length;
+    const baseCount = Math.floor(30 / numParticipants);
+    const remainder = 30 % numParticipants;
+
+    return NextResponse.json({
+      success: true,
+      mode,
+      numbersPerPerson: baseCount,
+      unassignedCount: mode === "EXCLUDE" || mode === "BUY_EXTRA" ? remainder : 0,
+      sharedCount: mode === "SHARED" ? remainder : 0,
+    });
   } catch (error) {
     console.error("Error distributing numbers:", error);
     return NextResponse.json({ error: "Failed to distribute numbers" }, { status: 500 });

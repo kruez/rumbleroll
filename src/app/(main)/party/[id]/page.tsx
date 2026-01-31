@@ -35,7 +35,17 @@ interface Entry {
 interface Assignment {
   id: string;
   entryNumber: number;
+  isShared?: boolean;
+  shareGroup?: number | null;
 }
+
+interface SharedAssignment {
+  entryNumber: number;
+  participantIds: string[];
+  shareGroup: number;
+}
+
+type DistributionMode = "EXCLUDE" | "BUY_EXTRA" | "SHARED";
 
 interface Participant {
   id: string;
@@ -58,11 +68,14 @@ interface Party {
   name: string;
   inviteCode: string;
   status: "LOBBY" | "NUMBERS_ASSIGNED" | "COMPLETED";
+  distributionMode: DistributionMode;
   entryFee: number | null;
   hostId: string;
   host: { id: string; name: string | null; email: string; venmoHandle: string | null; cashAppHandle: string | null };
   event: RumbleEvent;
   participants: Participant[];
+  unassignedNumbers: number[];
+  sharedAssignments: SharedAssignment[];
   isHost: boolean;
 }
 
@@ -197,11 +210,38 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
   const myAssignments = myParticipant?.assignments || [];
   const isParticipant = !!myParticipant;
 
+  // Separate owned and shared numbers
+  const myOwnedAssignments = myAssignments.filter(a => !a.isShared);
+  const mySharedAssignments = myAssignments.filter(a => a.isShared);
+
   // Get entry data for each assignment
-  const myNumbers = myAssignments.map(a => {
+  const myNumbers = myOwnedAssignments.map(a => {
     const entry = party.event.entries.find(e => e.entryNumber === a.entryNumber);
-    return { ...a, entry };
+    return { ...a, entry, isShared: false as const };
   });
+
+  // Get shared numbers with co-owners info
+  const mySharedNumbers = mySharedAssignments.map(a => {
+    const entry = party.event.entries.find(e => e.entryNumber === a.entryNumber);
+    const sharedInfo = party.sharedAssignments.find(s => s.entryNumber === a.entryNumber);
+    const coOwners = sharedInfo?.participantIds
+      .filter(pid => pid !== myParticipant?.id)
+      .map(pid => {
+        const p = party.participants.find(p => p.id === pid);
+        return p?.user.name || p?.user.email.split("@")[0] || "Unknown";
+      }) || [];
+    return { ...a, entry, isShared: true as const, coOwners };
+  });
+
+  // Helper to get co-owners for a shared number (for winner display)
+  const getSharedNumberOwners = (entryNumber: number): string[] => {
+    const sharedInfo = party.sharedAssignments.find(s => s.entryNumber === entryNumber);
+    if (!sharedInfo) return [];
+    return sharedInfo.participantIds.map(pid => {
+      const p = party.participants.find(p => p.id === pid);
+      return p?.user.name || p?.user.email.split("@")[0] || "Unknown";
+    });
+  };
 
   const getEntryStatus = (entry: Entry | undefined) => {
     if (!entry?.wrestlerName) {
@@ -341,47 +381,124 @@ export default function PartyPage({ params }: { params: Promise<{ id: string }> 
                       </>
                     )}
                   </div>
-                ) : myNumbers.length === 0 ? (
+                ) : myNumbers.length === 0 && mySharedNumbers.length === 0 ? (
                   <p className="text-gray-400">You don&apos;t have any numbers assigned.</p>
                 ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {myNumbers
-                      .sort((a, b) => a.entryNumber - b.entryNumber)
-                      .map((assignment) => {
-                        const entryStatus = getEntryStatus(assignment.entry);
-                        return (
-                          <div
-                            key={assignment.id}
-                            className={`p-4 rounded-lg border ${
-                              entryStatus.status === "winner"
-                                ? "border-yellow-500 bg-yellow-500/20"
-                                : entryStatus.status === "eliminated"
-                                ? "border-red-500/50 bg-red-500/10"
-                                : entryStatus.status === "active"
-                                ? "border-green-500 bg-green-500/20"
-                                : "border-gray-600 bg-gray-700/50"
-                            }`}
-                          >
-                            <div className="text-center">
-                              <div className="text-3xl font-bold text-white mb-2">
-                                #{assignment.entryNumber}
-                              </div>
-                              {assignment.entry?.wrestlerName ? (
-                                <>
-                                  <div className="text-white font-medium truncate">
-                                    {assignment.entry.wrestlerName}
+                  <div className="space-y-6">
+                    {/* Owned Numbers */}
+                    {myNumbers.length > 0 && (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {myNumbers
+                          .sort((a, b) => a.entryNumber - b.entryNumber)
+                          .map((assignment) => {
+                            const entryStatus = getEntryStatus(assignment.entry);
+                            return (
+                              <div
+                                key={assignment.id}
+                                className={`p-4 rounded-lg border ${
+                                  entryStatus.status === "winner"
+                                    ? "border-yellow-500 bg-yellow-500/20"
+                                    : entryStatus.status === "eliminated"
+                                    ? "border-red-500/50 bg-red-500/10"
+                                    : entryStatus.status === "active"
+                                    ? "border-green-500 bg-green-500/20"
+                                    : "border-gray-600 bg-gray-700/50"
+                                }`}
+                              >
+                                <div className="text-center">
+                                  <div className="text-3xl font-bold text-white mb-2">
+                                    #{assignment.entryNumber}
                                   </div>
-                                  <Badge className={`mt-2 ${entryStatus.color}`}>
-                                    {entryStatus.status === "winner" ? "WINNER!" : entryStatus.status === "active" ? "Active" : "Eliminated"}
-                                  </Badge>
-                                </>
-                              ) : (
-                                <div className="text-gray-500 text-sm">Not entered yet</div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                                  {assignment.entry?.wrestlerName ? (
+                                    <>
+                                      <div className="text-white font-medium truncate">
+                                        {assignment.entry.wrestlerName}
+                                      </div>
+                                      <Badge className={`mt-2 ${entryStatus.color}`}>
+                                        {entryStatus.status === "winner" ? "WINNER!" : entryStatus.status === "active" ? "Active" : "Eliminated"}
+                                      </Badge>
+                                    </>
+                                  ) : (
+                                    <div className="text-gray-500 text-sm">Not entered yet</div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+
+                    {/* Shared Numbers */}
+                    {mySharedNumbers.length > 0 && (
+                      <div>
+                        <p className="text-purple-400 text-sm font-medium mb-3 flex items-center gap-2">
+                          <span className="text-lg">&#129309;</span> Shared Numbers
+                        </p>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                          {mySharedNumbers
+                            .sort((a, b) => a.entryNumber - b.entryNumber)
+                            .map((assignment) => {
+                              const entryStatus = getEntryStatus(assignment.entry);
+                              return (
+                                <div
+                                  key={assignment.id}
+                                  className={`p-4 rounded-lg border-2 border-dashed ${
+                                    entryStatus.status === "winner"
+                                      ? "border-yellow-500 bg-yellow-500/10"
+                                      : entryStatus.status === "eliminated"
+                                      ? "border-red-500/50 bg-red-500/5"
+                                      : entryStatus.status === "active"
+                                      ? "border-green-500/50 bg-green-500/10"
+                                      : "border-purple-500/50 bg-purple-500/10"
+                                  }`}
+                                >
+                                  <div className="text-center">
+                                    <div className="text-2xl font-bold text-white mb-1 flex items-center justify-center gap-1">
+                                      #{assignment.entryNumber}
+                                      <span className="text-base">&#129309;</span>
+                                    </div>
+                                    {assignment.entry?.wrestlerName ? (
+                                      <>
+                                        <div className="text-white font-medium truncate text-sm">
+                                          {assignment.entry.wrestlerName}
+                                        </div>
+                                        <Badge className={`mt-2 ${entryStatus.color}`}>
+                                          {entryStatus.status === "winner" ? "WINNER!" : entryStatus.status === "active" ? "Active" : "Eliminated"}
+                                        </Badge>
+                                      </>
+                                    ) : (
+                                      <div className="text-gray-500 text-xs">Not entered yet</div>
+                                    )}
+                                    <p className="text-purple-300 text-xs mt-2 truncate">
+                                      with {assignment.coOwners.slice(0, 2).join(", ")}
+                                      {assignment.coOwners.length > 2 && ` +${assignment.coOwners.length - 2}`}
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Extra Numbers Available (BUY_EXTRA mode) */}
+                    {party.distributionMode === "BUY_EXTRA" && party.unassignedNumbers.length > 0 && (
+                      <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/50">
+                        <p className="text-blue-400 text-sm font-medium mb-2">Extra Entries Available</p>
+                        <p className="text-gray-400 text-xs mb-2">
+                          Numbers {party.unassignedNumbers.join(", ")} can be purchased. Contact the host to buy extra entries.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Excluded Numbers Info (EXCLUDE mode) */}
+                    {party.distributionMode === "EXCLUDE" && party.unassignedNumbers.length > 0 && (
+                      <div className="p-3 rounded-lg bg-gray-700/30 border border-gray-600">
+                        <p className="text-gray-400 text-xs">
+                          <span className="text-gray-500">Not in play:</span> #{party.unassignedNumbers.join(", #")}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>

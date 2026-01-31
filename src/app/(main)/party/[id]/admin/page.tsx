@@ -19,6 +19,15 @@ import { toast } from "sonner";
 import { Header } from "@/components/Header";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ScoreboardDropdown } from "@/components/ScoreboardDropdown";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+type DistributionMode = "EXCLUDE" | "BUY_EXTRA" | "SHARED";
+
+interface SharedAssignment {
+  entryNumber: number;
+  participantIds: string[];
+  shareGroup: number;
+}
 
 interface Entry {
   id: string;
@@ -33,6 +42,8 @@ interface Entry {
 interface Assignment {
   id: string;
   entryNumber: number;
+  isShared?: boolean;
+  shareGroup?: number | null;
 }
 
 interface Participant {
@@ -56,10 +67,13 @@ interface Party {
   name: string;
   inviteCode: string;
   status: "LOBBY" | "NUMBERS_ASSIGNED" | "COMPLETED";
+  distributionMode: DistributionMode;
   entryFee: number | null;
   hostId: string;
   event: RumbleEvent;
   participants: Participant[];
+  unassignedNumbers: number[];
+  sharedAssignments: SharedAssignment[];
   isHost: boolean;
 }
 
@@ -75,6 +89,8 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [updatingPayment, setUpdatingPayment] = useState<string | null>(null);
+  const [selectedExtras, setSelectedExtras] = useState<Map<number, string>>(new Map());
+  const [assigningExtra, setAssigningExtra] = useState<number | null>(null);
 
   const fetchParty = useCallback(async () => {
     try {
@@ -162,6 +178,38 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
       toast.error("Test mode action failed");
     } finally {
       setTestModeLoading(false);
+    }
+  };
+
+  const handleAssignExtra = async (entryNumber: number) => {
+    const participantId = selectedExtras.get(entryNumber);
+    if (!participantId) {
+      toast.error("Please select a participant");
+      return;
+    }
+    setAssigningExtra(entryNumber);
+    try {
+      const res = await fetch(`/api/parties/${id}/extras`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ entryNumber, participantId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || "Failed to assign extra number");
+        return;
+      }
+      toast.success(`#${entryNumber} assigned successfully`);
+      setSelectedExtras(prev => {
+        const next = new Map(prev);
+        next.delete(entryNumber);
+        return next;
+      });
+      fetchParty();
+    } catch {
+      toast.error("Failed to assign extra number");
+    } finally {
+      setAssigningExtra(null);
     }
   };
 
@@ -494,23 +542,35 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
                   <div className="grid grid-cols-6 gap-2">
                     {Array.from({ length: 30 }, (_, i) => i + 1).map((num) => {
                       const entry = entries.find(e => e.entryNumber === num);
+                      const isUnassigned = party.unassignedNumbers.includes(num);
+                      const isShared = party.sharedAssignments.some(s => s.entryNumber === num);
                       let bgColor = "bg-gray-700";
+                      let textColor = "text-white";
+                      let borderStyle = "";
+
+                      if (isUnassigned) {
+                        bgColor = "bg-gray-800";
+                        textColor = "text-gray-500";
+                      } else if (isShared) {
+                        borderStyle = "border-2 border-dashed border-purple-500";
+                      }
+
                       if (entry?.isWinner) bgColor = "bg-yellow-500";
                       else if (entry?.eliminatedAt) bgColor = "bg-red-500/50";
-                      else if (entry?.wrestlerName) bgColor = "bg-green-500";
+                      else if (entry?.wrestlerName) bgColor = isShared ? "bg-green-500/70" : "bg-green-500";
 
                       return (
                         <div
                           key={num}
-                          className={`${bgColor} rounded p-2 text-center text-white text-sm font-bold`}
-                          title={entry?.wrestlerName || `Entry #${num}`}
+                          className={`${bgColor} ${textColor} ${borderStyle} rounded p-2 text-center text-sm font-bold`}
+                          title={isUnassigned ? `#${num} - Not in play` : isShared ? `#${num} - Shared` : entry?.wrestlerName || `Entry #${num}`}
                         >
                           {num}
                         </div>
                       );
                     })}
                   </div>
-                  <div className="flex gap-4 mt-4 text-xs">
+                  <div className="flex flex-wrap gap-3 mt-4 text-xs">
                     <span className="flex items-center gap-1 text-gray-300">
                       <span className="w-3 h-3 bg-gray-700 rounded"></span> Pending
                     </span>
@@ -520,9 +580,108 @@ export default function PartyAdminPage({ params }: { params: Promise<{ id: strin
                     <span className="flex items-center gap-1 text-gray-300">
                       <span className="w-3 h-3 bg-red-500/50 rounded"></span> Out
                     </span>
+                    {party.unassignedNumbers.length > 0 && (
+                      <span className="flex items-center gap-1 text-gray-400">
+                        <span className="w-3 h-3 bg-gray-800 rounded"></span> Not in play
+                      </span>
+                    )}
+                    {party.sharedAssignments.length > 0 && (
+                      <span className="flex items-center gap-1 text-purple-400">
+                        <span className="w-3 h-3 border-2 border-dashed border-purple-500 rounded"></span> Shared
+                      </span>
+                    )}
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Assign Extra Numbers - BUY_EXTRA mode only */}
+              {party.distributionMode === "BUY_EXTRA" && party.unassignedNumbers.length > 0 && (
+                <Card className="bg-blue-500/10 border-blue-500/50">
+                  <CardHeader>
+                    <CardTitle className="text-blue-400 text-lg">Assign Extra Entries</CardTitle>
+                    <CardDescription className="text-gray-400">
+                      Assign unclaimed numbers to participants who purchased extras
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {party.unassignedNumbers.map((num) => (
+                      <div key={num} className="flex items-center gap-2">
+                        <span className="text-white font-bold w-10">#{num}</span>
+                        <Select
+                          value={selectedExtras.get(num) || ""}
+                          onValueChange={(value) => {
+                            setSelectedExtras(prev => {
+                              const next = new Map(prev);
+                              if (value) {
+                                next.set(num, value);
+                              } else {
+                                next.delete(num);
+                              }
+                              return next;
+                            });
+                          }}
+                        >
+                          <SelectTrigger className="flex-1 bg-gray-900 border-gray-600 text-white">
+                            <SelectValue placeholder="Select participant" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {party.participants.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.user.name || p.user.email}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          onClick={() => handleAssignExtra(num)}
+                          disabled={!selectedExtras.get(num) || assigningExtra === num}
+                          className="bg-blue-600 hover:bg-blue-700"
+                        >
+                          {assigningExtra === num ? "..." : "Assign"}
+                        </Button>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Shared Numbers Info - SHARED mode only */}
+              {party.distributionMode === "SHARED" && party.sharedAssignments.length > 0 && (
+                <Card className="bg-purple-500/10 border-purple-500/50">
+                  <CardHeader>
+                    <CardTitle className="text-purple-400 text-lg">Shared Numbers</CardTitle>
+                    <CardDescription className="text-gray-400">
+                      These numbers are shared among multiple participants
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {party.sharedAssignments.map((shared) => {
+                      const entry = entries.find(e => e.entryNumber === shared.entryNumber);
+                      const owners = shared.participantIds.map(pid => {
+                        const p = party.participants.find(p => p.id === pid);
+                        return p?.user.name || p?.user.email.split("@")[0] || "Unknown";
+                      });
+                      return (
+                        <div key={shared.entryNumber} className="p-3 bg-purple-500/10 rounded border border-purple-500/30">
+                          <div className="flex items-center gap-2">
+                            <span className="text-white font-bold">#{shared.entryNumber}</span>
+                            {entry?.wrestlerName && (
+                              <span className="text-gray-300">{entry.wrestlerName}</span>
+                            )}
+                            {entry?.isWinner && (
+                              <Badge className="bg-yellow-500 text-black">WINNER!</Badge>
+                            )}
+                          </div>
+                          <p className="text-purple-300 text-sm mt-1">
+                            Shared by: {owners.join(", ")}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Recent Eliminations */}
               <Card className="bg-gray-800/50 border-gray-700">

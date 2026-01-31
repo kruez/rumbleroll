@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { name, eventId, hostParticipates = true, entryFee } = await request.json();
+    const { name, eventId, hostParticipates = true, distributionMode = "EXCLUDE", entryFee } = await request.json();
 
     if (!name) {
       return NextResponse.json({ error: "Party name is required" }, { status: 400 });
@@ -94,6 +94,7 @@ export async function POST(request: Request) {
         inviteCode,
         hostId: session.user.id,
         eventId,
+        distributionMode,
         entryFee: entryFee ? parseFloat(entryFee) : null,
         // Only create participant record if host wants to participate
         ...(hostParticipates && {
