@@ -347,8 +347,8 @@ export default function WrestlerManagementPage() {
               <Button
                 onClick={() => handleScrape(true)}
                 disabled={scraping}
-                variant="outline"
-                className="border-gray-500 text-gray-300 hover:bg-gray-700"
+                variant="secondary"
+                className="bg-gray-600 text-white hover:bg-gray-500"
               >
                 Force Refresh
               </Button>
@@ -407,9 +407,9 @@ export default function WrestlerManagementPage() {
                       <div className="flex gap-2">
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant="secondary"
                           onClick={() => handleOpenEditDialog(w)}
-                          className="border-gray-500 text-gray-300 hover:bg-gray-600"
+                          className="bg-gray-600 text-white hover:bg-gray-500"
                         >
                           Edit
                         </Button>

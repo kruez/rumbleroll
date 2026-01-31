@@ -60,10 +60,12 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
   const [forceDeleteDialogOpen, setForceDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Entry editing state
-  const [editingWrestlerEntry, setEditingWrestlerEntry] = useState<number | null>(null);
-  const [editWrestlerInput, setEditWrestlerInput] = useState("");
-  const [editWrestlerImageUrl, setEditWrestlerImageUrl] = useState<string | null>(null);
+  // Edit wrestler dialog state
+  const [editWrestlerDialogOpen, setEditWrestlerDialogOpen] = useState(false);
+  const [editWrestlerDialogName, setEditWrestlerDialogName] = useState("");
+  const [editWrestlerDialogImageUrl, setEditWrestlerDialogImageUrl] = useState("");
+  const [editWrestlerDialogEntryNumber, setEditWrestlerDialogEntryNumber] = useState<number | null>(null);
+  const [editWrestlerImageSearchOpen, setEditWrestlerImageSearchOpen] = useState(false);
 
   // Quick-add wrestler state
   const [quickAddDialogOpen, setQuickAddDialogOpen] = useState(false);
@@ -244,33 +246,27 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
   };
 
   const handleStartEditWrestler = (entryNumber: number, currentName: string, currentImageUrl: string | null) => {
-    setEditingWrestlerEntry(entryNumber);
-    setEditWrestlerInput(currentName);
-    setEditWrestlerImageUrl(currentImageUrl);
+    setEditWrestlerDialogEntryNumber(entryNumber);
+    setEditWrestlerDialogName(currentName);
+    setEditWrestlerDialogImageUrl(currentImageUrl || "");
+    setEditWrestlerDialogOpen(true);
   };
 
-  const handleCancelEditWrestler = () => {
-    setEditingWrestlerEntry(null);
-    setEditWrestlerInput("");
-    setEditWrestlerImageUrl(null);
-  };
-
-  const handleSaveEditWrestler = async (entryNumber: number) => {
+  const handleEditWrestlerSubmit = async () => {
+    if (!editWrestlerDialogName.trim() || !editWrestlerDialogEntryNumber) return;
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/events/${id}/entries`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          entryNumber,
-          wrestlerName: editWrestlerInput.trim() || null,
-          wrestlerImageUrl: editWrestlerImageUrl,
+          entryNumber: editWrestlerDialogEntryNumber,
+          wrestlerName: editWrestlerDialogName.trim(),
+          wrestlerImageUrl: editWrestlerDialogImageUrl.trim() || null,
         }),
       });
       if (res.ok) {
-        setEditingWrestlerEntry(null);
-        setEditWrestlerInput("");
-        setEditWrestlerImageUrl(null);
+        setEditWrestlerDialogOpen(false);
         fetchEvent();
       }
     } catch (error) {
@@ -292,9 +288,6 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
         }),
       });
       if (res.ok) {
-        setEditingWrestlerEntry(null);
-        setEditWrestlerInput("");
-        setEditWrestlerImageUrl(null);
         fetchEvent();
       }
     } catch (error) {
@@ -656,67 +649,27 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
                   </div>
                   <div className="flex-1">
                     {entry.wrestlerName ? (
-                      editingWrestlerEntry === entry.entryNumber ? (
-                        <div className="flex items-center gap-2">
-                          <div className="w-48">
-                            <WrestlerAutocomplete
-                              value={editWrestlerInput}
-                              onChange={(value, imageUrl) => {
-                                setEditWrestlerInput(value);
-                                setEditWrestlerImageUrl(imageUrl ?? null);
-                              }}
-                              placeholder="Search wrestlers..."
-                              autoFocus
-                            />
-                          </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-white font-medium">{entry.wrestlerName}</span>
+                        {entry.isWinner && (
+                          <Badge className="bg-yellow-500 text-black">WINNER</Badge>
+                        )}
+                        {entry.eliminatedAt && entry.eliminatedBy && (
+                          <span className="text-red-400 text-sm">
+                            Eliminated by {entry.eliminatedBy}
+                          </span>
+                        )}
+                        {!entry.isWinner && !entry.eliminatedAt && (
                           <Button
                             size="sm"
-                            onClick={() => handleSaveEditWrestler(entry.entryNumber)}
-                            disabled={saving}
-                            className="bg-green-600 hover:bg-green-700"
+                            variant="ghost"
+                            onClick={() => handleStartEditWrestler(entry.entryNumber, entry.wrestlerName!, entry.wrestlerImageUrl)}
+                            className="text-gray-400 hover:text-white hover:bg-gray-700 h-6 px-2"
                           >
-                            Save
+                            Edit
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => handleClearWrestler(entry.entryNumber)}
-                            disabled={saving}
-                          >
-                            Clear
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleCancelEditWrestler}
-                            className="border-gray-500 text-gray-300 hover:bg-gray-700"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span className="text-white font-medium">{entry.wrestlerName}</span>
-                          {entry.isWinner && (
-                            <Badge className="bg-yellow-500 text-black">WINNER</Badge>
-                          )}
-                          {entry.eliminatedAt && entry.eliminatedBy && (
-                            <span className="text-red-400 text-sm">
-                              Eliminated by {entry.eliminatedBy}
-                            </span>
-                          )}
-                          {!entry.isWinner && !entry.eliminatedAt && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleStartEditWrestler(entry.entryNumber, entry.wrestlerName!, entry.wrestlerImageUrl)}
-                              className="text-gray-400 hover:text-white hover:bg-gray-700 h-6 px-2"
-                            >
-                              Edit
-                            </Button>
-                          )}
-                        </div>
-                      )
+                        )}
+                      </div>
                     ) : (
                       <span className="text-gray-500">Not entered yet</span>
                     )}
@@ -941,10 +894,10 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
                 />
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="secondary"
                   onClick={() => setQuickAddImageSearchOpen(true)}
                   disabled={!quickAddName.trim()}
-                  className="border-gray-500 text-gray-300 hover:bg-gray-600"
+                  className="bg-gray-600 text-white hover:bg-gray-500"
                 >
                   Search
                 </Button>
@@ -987,6 +940,88 @@ export default function EventAdminPage({ params }: { params: Promise<{ id: strin
         onSelect={(url) => setQuickAddImageUrl(url)}
         source="wrestlers"
         initialQuery={quickAddName}
+      />
+
+      {/* Edit Wrestler Dialog */}
+      <Dialog open={editWrestlerDialogOpen} onOpenChange={setEditWrestlerDialogOpen}>
+        <DialogContent className="bg-gray-800 border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Edit Wrestler</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Update wrestler details for entry #{editWrestlerDialogEntryNumber}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="editWrestlerName" className="text-white">Name *</Label>
+              <Input
+                id="editWrestlerName"
+                value={editWrestlerDialogName}
+                onChange={(e) => setEditWrestlerDialogName(e.target.value)}
+                className="bg-gray-700 border-gray-600 text-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editWrestlerImageUrl" className="text-white">Image URL (optional)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="editWrestlerImageUrl"
+                  value={editWrestlerDialogImageUrl}
+                  onChange={(e) => setEditWrestlerDialogImageUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="bg-gray-700 border-gray-600 text-white flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setEditWrestlerImageSearchOpen(true)}
+                  disabled={!editWrestlerDialogName.trim()}
+                  className="bg-gray-600 text-white hover:bg-gray-500"
+                >
+                  Search
+                </Button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (editWrestlerDialogEntryNumber) {
+                  handleClearWrestler(editWrestlerDialogEntryNumber);
+                  setEditWrestlerDialogOpen(false);
+                }
+              }}
+              disabled={saving}
+              className="mr-auto"
+            >
+              Clear Entry
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setEditWrestlerDialogOpen(false)}
+              className="bg-transparent border-gray-500 text-gray-300 hover:bg-gray-700"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEditWrestlerSubmit}
+              disabled={saving || !editWrestlerDialogName.trim()}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              {saving ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Image Search Dialog for Edit Wrestler */}
+      <ImageSearchDialog
+        open={editWrestlerImageSearchOpen}
+        onOpenChange={setEditWrestlerImageSearchOpen}
+        onSelect={(url) => setEditWrestlerDialogImageUrl(url)}
+        source="wrestlers"
+        initialQuery={editWrestlerDialogName}
       />
     </div>
   );

@@ -678,8 +678,8 @@ export default function TestDashboardPage({
                   <Button
                     onClick={handleResetEverything}
                     disabled={actionLoading || simulationRunning}
-                    variant="outline"
-                    className="bg-transparent border-gray-500 text-gray-300 hover:bg-gray-700 h-16 text-lg"
+                    variant="secondary"
+                    className="bg-gray-600 text-white hover:bg-gray-500 h-16 text-lg"
                   >
                     Reset
                   </Button>
@@ -723,8 +723,8 @@ export default function TestDashboardPage({
                   <Button
                     onClick={handleResetEverything}
                     disabled={actionLoading || simulationRunning}
-                    variant="outline"
-                    className="bg-transparent border-gray-500 text-gray-300 hover:bg-gray-700 h-16 text-lg"
+                    variant="secondary"
+                    className="bg-gray-600 text-white hover:bg-gray-500 h-16 text-lg"
                   >
                     Reset
                   </Button>
@@ -806,8 +806,8 @@ export default function TestDashboardPage({
                   <Button
                     onClick={handleResetEverything}
                     disabled={actionLoading}
-                    variant="outline"
-                    className="bg-transparent border-gray-500 text-gray-300 hover:bg-gray-700 h-16 text-lg"
+                    variant="secondary"
+                    className="bg-gray-600 text-white hover:bg-gray-500 h-16 text-lg"
                   >
                     Reset Everything
                   </Button>
