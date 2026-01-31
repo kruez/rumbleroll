@@ -79,38 +79,6 @@ interface Party {
   participants: Participant[];
 }
 
-interface ReplayEvent {
-  type: "entry" | "elimination" | "winner";
-  entry: Entry;
-  timestamp: number;
-}
-
-type CelebrationNameStatus =
-  | "entering"
-  | "active"
-  | "pending_elimination"  // Waiting for collision to trigger elimination
-  | "eliminating"          // Shake/explode sequence
-  | "eliminated";
-
-type EliminationPhase = "red" | "shake" | "explode";
-
-interface FloatingName {
-  id: string;
-  entryNumber: number;
-  wrestlerName: string;
-  duration: string;           // "2:34" format
-  x: number;                  // px position
-  y: number;
-  vx: number;                 // velocity X (px/frame)
-  vy: number;                 // velocity Y (px/frame)
-  width: number;              // element width for collision
-  height: number;             // element height for collision
-  status: CelebrationNameStatus;
-  scale: number;              // for enter animation (4.0 -> 1.0)
-  opacity: number;            // for fade effect (0.3 -> 0.7)
-  eliminatedBy?: string;      // Track who eliminated them
-  eliminationPhase?: EliminationPhase; // Current phase of elimination animation
-}
 
 export default function TVDisplayV2Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -125,16 +93,6 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
   const [skullAnimatingEntries, setSkullAnimatingEntries] = useState<Set<string>>(new Set());
   const [latestEntryId, setLatestEntryId] = useState<string | null>(null);
 
-  // Winner celebration replay state
-  const [showCelebrationReplay, setShowCelebrationReplay] = useState(false);
-  const [celebrationReplayIndex, setCelebrationReplayIndex] = useState(0);
-  const [floatingNames, setFloatingNames] = useState<FloatingName[]>([]);
-  const [celebrationTimeline, setCelebrationTimeline] = useState<ReplayEvent[]>([]);
-  const celebrationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const winnerTimestampRef = useRef<number | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const celebrationContainerRef = useRef<HTMLDivElement>(null);
-  const floatingNamesRef = useRef<FloatingName[]>([]);
 
   // Track previous entries for detecting changes
   const prevEntriesRef = useRef<Entry[]>([]);
@@ -259,101 +217,6 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
     return () => clearInterval(interval);
   }, [fetchParty]);
 
-  // Collision detection between two floating names
-  const checkCollision = useCallback((a: FloatingName, b: FloatingName): boolean => {
-    const padding = 8; // small buffer to prevent touching
-    return !(a.x + a.width + padding < b.x ||
-             b.x + b.width + padding < a.x ||
-             a.y + a.height + padding < b.y ||
-             b.y + b.height + padding < a.y);
-  }, []);
-
-  // Resolve collision by swapping velocity components
-  const resolveCollision = useCallback((a: FloatingName, b: FloatingName) => {
-    // Calculate center points
-    const ax = a.x + a.width / 2;
-    const ay = a.y + a.height / 2;
-    const bx = b.x + b.width / 2;
-    const by = b.y + b.height / 2;
-
-    // Normal vector
-    const dx = bx - ax;
-    const dy = by - ay;
-    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-    const nx = dx / dist;
-    const ny = dy / dist;
-
-    // Relative velocity
-    const dvx = a.vx - b.vx;
-    const dvy = a.vy - b.vy;
-    const dvn = dvx * nx + dvy * ny;
-
-    // Only resolve if approaching
-    if (dvn > 0) return;
-
-    // Swap velocity components along normal with some energy loss
-    const restitution = 0.9;
-    a.vx -= dvn * nx * restitution;
-    a.vy -= dvn * ny * restitution;
-    b.vx += dvn * nx * restitution;
-    b.vy += dvn * ny * restitution;
-
-    // Push apart to prevent sticking
-    const overlap = (a.width + b.width) / 2 - dist + 20;
-    if (overlap > 0) {
-      a.x -= overlap * nx / 2;
-      a.y -= overlap * ny / 2;
-      b.x += overlap * nx / 2;
-      b.y += overlap * ny / 2;
-    }
-  }, []);
-
-  // Generate initial position that doesn't overlap existing names
-  const generateInitialPosition = useCallback((
-    containerWidth: number,
-    containerHeight: number,
-    elementWidth: number,
-    elementHeight: number
-  ): { x: number; y: number } => {
-    const margin = 50;
-    const maxAttempts = 30;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const x = margin + Math.random() * (containerWidth - elementWidth - margin * 2);
-      const y = margin + Math.random() * (containerHeight - elementHeight - margin * 2);
-
-      // Check against existing names
-      const overlaps = floatingNamesRef.current.some(name => {
-        if (name.status === "eliminated") return false;
-        const padding = 20;
-        return !(x + elementWidth + padding < name.x ||
-                 name.x + name.width + padding < x ||
-                 y + elementHeight + padding < name.y ||
-                 name.y + name.height + padding < y);
-      });
-
-      if (!overlaps) {
-        return { x, y };
-      }
-    }
-
-    // Fallback: return a random position anyway
-    return {
-      x: margin + Math.random() * (containerWidth - elementWidth - margin * 2),
-      y: margin + Math.random() * (containerHeight - elementHeight - margin * 2),
-    };
-  }, []);
-
-  // Generate random velocity - calm, slow drifting
-  const generateRandomVelocity = useCallback((): { vx: number; vy: number } => {
-    const speed = 0.3 + Math.random() * 0.3; // 0.3-0.6 px/frame (much slower, calm float)
-    const angle = Math.random() * Math.PI * 2;
-    return {
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-    };
-  }, []);
-
   // Helper to format duration as MM:SS
   const formatDuration = useCallback((enteredAt: string | null, eliminatedAt: string | null): string => {
     if (!enteredAt) return "0:00";
@@ -364,353 +227,6 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
     const seconds = duration % 60;
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }, [now]);
-
-  // Build replay timeline from entries
-  const buildReplayTimeline = useCallback((entries: Entry[]): ReplayEvent[] => {
-    const events: ReplayEvent[] = [];
-
-    for (const entry of entries) {
-      if (entry.enteredAt && entry.wrestlerName) {
-        events.push({
-          type: "entry",
-          entry,
-          timestamp: new Date(entry.enteredAt).getTime(),
-        });
-      }
-      if (entry.eliminatedAt) {
-        events.push({
-          type: "elimination",
-          entry,
-          timestamp: new Date(entry.eliminatedAt).getTime(),
-        });
-      }
-      if (entry.isWinner) {
-        events.push({
-          type: "winner",
-          entry,
-          timestamp: entry.eliminatedAt
-            ? new Date(entry.eliminatedAt).getTime() + 1
-            : Date.now(),
-        });
-      }
-    }
-
-    return events.sort((a, b) => a.timestamp - b.timestamp);
-  }, []);
-
-  // Start celebration replay 5 seconds after winner is shown
-  // DISABLED: Match replay is malfunctioning - showing same wrestler repeatedly
-  // useEffect(() => {
-  //   if (!party) return;
-  //
-  //   const winner = party.event.entries.find((e) => e.isWinner);
-  //
-  //   if (winner && !winnerTimestampRef.current) {
-  //     winnerTimestampRef.current = Date.now();
-  //   }
-  //
-  //   if (winner && winnerTimestampRef.current && !showCelebrationReplay) {
-  //     const elapsed = Date.now() - winnerTimestampRef.current;
-  //     const timeUntilReplay = 5000 - elapsed;
-  //
-  //     const startReplay = () => {
-  //       const timeline = buildReplayTimeline(party.event.entries);
-  //       setCelebrationTimeline(timeline);
-  //       setCelebrationReplayIndex(0);
-  //       setFloatingNames([]);
-  //       floatingNamesRef.current = [];
-  //       setShowCelebrationReplay(true);
-  //     };
-  //
-  //     if (timeUntilReplay <= 0) {
-  //       startReplay();
-  //     } else {
-  //       const timeout = setTimeout(startReplay, timeUntilReplay);
-  //       return () => clearTimeout(timeout);
-  //     }
-  //   }
-  // }, [party, showCelebrationReplay, buildReplayTimeline]);
-
-  // Process celebration replay events with calm, dramatic timing
-  useEffect(() => {
-    if (!showCelebrationReplay || celebrationTimeline.length === 0) return;
-
-    const processNextEvent = () => {
-      if (celebrationReplayIndex >= celebrationTimeline.length) {
-        // Replay complete, restart after 5 seconds
-        celebrationTimeoutRef.current = setTimeout(() => {
-          setCelebrationReplayIndex(0);
-          setFloatingNames([]);
-          floatingNamesRef.current = [];
-        }, 5000);
-        return;
-      }
-
-      const event = celebrationTimeline[celebrationReplayIndex];
-      // Calm timing: entry=3000ms, elimination=3000ms, winner=2000ms
-      const delay = event.type === "entry" ? 3000 : event.type === "elimination" ? 3000 : 2000;
-
-      if (event.type === "entry" && event.entry.wrestlerName) {
-        const container = celebrationContainerRef.current;
-        const containerWidth = container?.clientWidth || window.innerWidth;
-        const containerHeight = container?.clientHeight || window.innerHeight;
-
-        // Estimate element size (will be updated by measurement)
-        const estimatedWidth = 250;
-        const estimatedHeight = 50;
-
-        // Calculate duration for this entry
-        const entryDuration = formatDuration(event.entry.enteredAt, event.entry.eliminatedAt);
-
-        // Start from center of screen, zooming in from far away
-        const newName: FloatingName = {
-          id: event.entry.id,
-          entryNumber: event.entry.entryNumber,
-          wrestlerName: event.entry.wrestlerName!,
-          duration: entryDuration,
-          x: containerWidth / 2 - estimatedWidth / 2,
-          y: containerHeight / 2 - estimatedHeight / 2,
-          vx: 0, // Start stationary
-          vy: 0,
-          width: estimatedWidth,
-          height: estimatedHeight,
-          status: "entering",
-          scale: 4.0, // Start large (zooming in from far away)
-          opacity: 0.3, // Start translucent/ghostly
-        };
-
-        // Add new floating name in "entering" state
-        setFloatingNames((prev) => {
-          const updated = [...prev, newName];
-          floatingNamesRef.current = updated;
-          return updated;
-        });
-
-        // Transition to "active" after 1.5s with zoom animation
-        setTimeout(() => {
-          const velocity = generateRandomVelocity();
-          setFloatingNames((prev) => {
-            const updated = prev.map((n) =>
-              n.id === event.entry.id && n.status === "entering"
-                ? { ...n, status: "active" as CelebrationNameStatus, scale: 1.0, opacity: 0.7, vx: velocity.vx, vy: velocity.vy }
-                : n
-            );
-            floatingNamesRef.current = updated;
-            return updated;
-          });
-        }, 1500);
-      } else if (event.type === "elimination" && event.entry.wrestlerName) {
-        // Mark as "pending_elimination" - wait for collision to trigger visual effect
-        setFloatingNames((prev) => {
-          const updated = prev.map((n) =>
-            n.id === event.entry.id && n.status === "active"
-              ? { ...n, status: "pending_elimination" as CelebrationNameStatus, eliminatedBy: event.entry.eliminatedBy || undefined }
-              : n
-          );
-          floatingNamesRef.current = updated;
-          return updated;
-        });
-      }
-
-      celebrationTimeoutRef.current = setTimeout(() => {
-        setCelebrationReplayIndex((prev) => prev + 1);
-      }, delay);
-    };
-
-    processNextEvent();
-
-    return () => {
-      if (celebrationTimeoutRef.current) {
-        clearTimeout(celebrationTimeoutRef.current);
-      }
-    };
-  }, [showCelebrationReplay, celebrationReplayIndex, celebrationTimeline, generateRandomVelocity, formatDuration]);
-
-  // Trigger elimination animation sequence with phased updates
-  const triggerEliminationAnimation = useCallback((name: FloatingName) => {
-    const nameId = name.id;
-    name.status = "eliminating";
-    name.eliminationPhase = "red";
-
-    // Phase 1: Turn red (immediate)
-    setFloatingNames((prev) => {
-      const updated = prev.map((n) =>
-        n.id === nameId ? { ...n, status: "eliminating" as CelebrationNameStatus, eliminationPhase: "red" as EliminationPhase } : n
-      );
-      floatingNamesRef.current = updated;
-      return updated;
-    });
-
-    // Phase 2: Start shake (after 200ms)
-    setTimeout(() => {
-      setFloatingNames((prev) => {
-        const updated = prev.map((n) =>
-          n.id === nameId && n.status === "eliminating"
-            ? { ...n, eliminationPhase: "shake" as EliminationPhase }
-            : n
-        );
-        floatingNamesRef.current = updated;
-        return updated;
-      });
-    }, 200);
-
-    // Phase 3: Start explode (after 600ms)
-    setTimeout(() => {
-      setFloatingNames((prev) => {
-        const updated = prev.map((n) =>
-          n.id === nameId && n.status === "eliminating"
-            ? { ...n, eliminationPhase: "explode" as EliminationPhase }
-            : n
-        );
-        floatingNamesRef.current = updated;
-        return updated;
-      });
-    }, 600);
-
-    // Phase 4: Set to eliminated (after 900ms)
-    setTimeout(() => {
-      setFloatingNames((prev) => {
-        const updated = prev.map((n) =>
-          n.id === nameId ? { ...n, status: "eliminated" as CelebrationNameStatus } : n
-        );
-        floatingNamesRef.current = updated;
-        return updated;
-      });
-    }, 900);
-  }, []);
-
-  // Physics animation loop for bouncing names
-  useEffect(() => {
-    if (!showCelebrationReplay) return;
-
-    const updatePhysics = () => {
-      const container = celebrationContainerRef.current;
-      if (!container) {
-        animationFrameRef.current = requestAnimationFrame(updatePhysics);
-        return;
-      }
-
-      const { width, height } = container.getBoundingClientRect();
-
-      setFloatingNames((prev) => {
-        // Skip if no names to animate
-        if (prev.length === 0) return prev;
-
-        // Create mutable copies for physics updates
-        const next = prev.map((name) => ({ ...name }));
-
-        // Update positions for active and pending_elimination names
-        for (const name of next) {
-          if (name.status === "eliminated" || name.status === "eliminating") continue;
-
-          // Update position
-          name.x += name.vx;
-          name.y += name.vy;
-
-          // Wall bounce with margin
-          const margin = 10;
-          let hitWall = false;
-
-          if (name.x < margin) {
-            name.x = margin;
-            name.vx = Math.abs(name.vx);
-            hitWall = true;
-          }
-          if (name.x + name.width > width - margin) {
-            name.x = width - name.width - margin;
-            name.vx = -Math.abs(name.vx);
-            hitWall = true;
-          }
-          if (name.y < margin) {
-            name.y = margin;
-            name.vy = Math.abs(name.vy);
-            hitWall = true;
-          }
-          if (name.y + name.height > height - margin) {
-            name.y = height - name.height - margin;
-            name.vy = -Math.abs(name.vy);
-            hitWall = true;
-          }
-
-          // Wall collision triggers elimination for pending_elimination
-          if (hitWall && name.status === "pending_elimination") {
-            triggerEliminationAnimation(name);
-          }
-        }
-
-        // Element collision detection
-        for (let i = 0; i < next.length; i++) {
-          for (let j = i + 1; j < next.length; j++) {
-            const a = next[i];
-            const b = next[j];
-            if (a.status !== "eliminated" && a.status !== "eliminating" &&
-                b.status !== "eliminated" && b.status !== "eliminating") {
-              if (checkCollision(a, b)) {
-                // Check if either is pending_elimination - trigger their elimination on collision
-                const aWasPending = a.status === "pending_elimination";
-                const bWasPending = b.status === "pending_elimination";
-
-                if (aWasPending) {
-                  triggerEliminationAnimation(a);
-                }
-                if (bWasPending) {
-                  triggerEliminationAnimation(b);
-                }
-
-                // Still resolve collision physics if neither was pending elimination
-                if (!aWasPending && !bWasPending) {
-                  resolveCollision(a, b);
-                }
-              }
-            }
-          }
-        }
-
-        floatingNamesRef.current = next;
-        return next;
-      });
-
-      animationFrameRef.current = requestAnimationFrame(updatePhysics);
-    };
-
-    animationFrameRef.current = requestAnimationFrame(updatePhysics);
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, [showCelebrationReplay, checkCollision, resolveCollision, triggerEliminationAnimation]);
-
-  // Measure floating name elements after render to get accurate sizes
-  useEffect(() => {
-    if (!showCelebrationReplay || !celebrationContainerRef.current) return;
-
-    const container = celebrationContainerRef.current;
-    const elements = container.querySelectorAll('[data-floating-name]');
-
-    if (elements.length === 0) return;
-
-    setFloatingNames((prev) => {
-      let updated = false;
-      const next = prev.map((name) => {
-        const element = container.querySelector(`[data-floating-name="${name.id}"]`);
-        if (element) {
-          const rect = element.getBoundingClientRect();
-          if (rect.width !== name.width || rect.height !== name.height) {
-            updated = true;
-            return { ...name, width: rect.width, height: rect.height };
-          }
-        }
-        return name;
-      });
-      if (updated) {
-        floatingNamesRef.current = next;
-        return next;
-      }
-      return prev;
-    });
-  }, [showCelebrationReplay, floatingNames.length]);
 
   if (loading) {
     return (
@@ -761,30 +277,115 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
 
       {/* Winner Celebration Overlay */}
       {winner && (
-        <div className="fixed inset-0 bg-black/90 flex flex-col items-center justify-start z-50 overflow-hidden pt-8">
+        <div className="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-50 overflow-hidden">
+          {/* Fireworks CSS */}
+          <style>{`
+            @keyframes firework {
+              0% { transform: translate(0, 0) scale(1); opacity: 1; }
+              100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+            }
+            @keyframes fireworkBurst {
+              0% { transform: scale(0); opacity: 0; }
+              10% { transform: scale(1); opacity: 1; }
+              100% { transform: scale(1); opacity: 0; }
+            }
+            .firework-particle {
+              position: absolute;
+              width: 8px;
+              height: 8px;
+              border-radius: 50%;
+              animation: firework 1.5s ease-out forwards;
+            }
+            .firework-burst {
+              position: absolute;
+              animation: fireworkBurst 2s ease-out infinite;
+            }
+          `}</style>
+
+          {/* Background wrestler image */}
+          {winner.wrestlerImageUrl && (
+            <div className="absolute inset-0 overflow-hidden">
+              <img
+                src={getProxiedImageUrl(winner.wrestlerImageUrl) || ""}
+                alt=""
+                className="w-full h-full object-cover opacity-15 blur-sm"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-black/40" />
+            </div>
+          )}
+
           {/* Spotlight effect */}
           <div className="absolute inset-0 bg-gradient-radial from-yellow-500/30 via-transparent to-transparent animate-pulse" />
 
-          {/* Animated sparkles */}
+          {/* Fireworks bursts */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            {[...Array(20)].map((_, i) => (
-              <div
-                key={i}
-                className="absolute w-2 h-2 bg-yellow-400 rounded-full animate-bounce"
-                style={{
-                  left: `${Math.random() * 100}%`,
-                  top: `${Math.random() * 100}%`,
-                  animationDelay: `${Math.random() * 2}s`,
-                  animationDuration: `${1 + Math.random()}s`,
-                }}
-              />
-            ))}
+            {/* Burst 1 - Top Left */}
+            <div className="firework-burst" style={{ left: '15%', top: '20%', animationDelay: '0s' }}>
+              {[...Array(12)].map((_, i) => {
+                const angle = (i / 12) * 360;
+                const tx = Math.cos(angle * Math.PI / 180) * 120;
+                const ty = Math.sin(angle * Math.PI / 180) * 120;
+                return (
+                  <div
+                    key={i}
+                    className="firework-particle bg-yellow-400"
+                    style={{ '--tx': `${tx}px`, '--ty': `${ty}px`, animationDelay: `${i * 0.05}s` } as React.CSSProperties}
+                  />
+                );
+              })}
+            </div>
+            {/* Burst 2 - Top Right */}
+            <div className="firework-burst" style={{ right: '15%', top: '15%', animationDelay: '0.5s' }}>
+              {[...Array(12)].map((_, i) => {
+                const angle = (i / 12) * 360;
+                const tx = Math.cos(angle * Math.PI / 180) * 100;
+                const ty = Math.sin(angle * Math.PI / 180) * 100;
+                return (
+                  <div
+                    key={i}
+                    className="firework-particle bg-orange-400"
+                    style={{ '--tx': `${tx}px`, '--ty': `${ty}px`, animationDelay: `${0.5 + i * 0.05}s` } as React.CSSProperties}
+                  />
+                );
+              })}
+            </div>
+            {/* Burst 3 - Bottom Left */}
+            <div className="firework-burst" style={{ left: '20%', bottom: '25%', animationDelay: '1s' }}>
+              {[...Array(10)].map((_, i) => {
+                const angle = (i / 10) * 360;
+                const tx = Math.cos(angle * Math.PI / 180) * 90;
+                const ty = Math.sin(angle * Math.PI / 180) * 90;
+                return (
+                  <div
+                    key={i}
+                    className="firework-particle bg-amber-300"
+                    style={{ '--tx': `${tx}px`, '--ty': `${ty}px`, animationDelay: `${1 + i * 0.05}s` } as React.CSSProperties}
+                  />
+                );
+              })}
+            </div>
+            {/* Burst 4 - Bottom Right */}
+            <div className="firework-burst" style={{ right: '20%', bottom: '20%', animationDelay: '1.5s' }}>
+              {[...Array(10)].map((_, i) => {
+                const angle = (i / 10) * 360;
+                const tx = Math.cos(angle * Math.PI / 180) * 110;
+                const ty = Math.sin(angle * Math.PI / 180) * 110;
+                return (
+                  <div
+                    key={i}
+                    className="firework-particle bg-yellow-500"
+                    style={{ '--tx': `${tx}px`, '--ty': `${ty}px`, animationDelay: `${1.5 + i * 0.05}s` } as React.CSSProperties}
+                  />
+                );
+              })}
+            </div>
           </div>
 
           <div className="text-center relative z-10 animate-[fadeIn_1s_ease-out]">
-            {/* Championship Belt SVG */}
-            <div className="mb-4 flex justify-center">
-              <svg viewBox="0 0 200 120" className="w-48 h-32 drop-shadow-[0_0_30px_rgba(234,179,8,0.8)]">
+            {/* Championship Belt SVG - Enlarged */}
+            <div className="mb-6 flex justify-center">
+              <svg viewBox="0 0 200 120" className="w-64 h-44 drop-shadow-[0_0_30px_rgba(234,179,8,0.8)]">
                 <ellipse cx="100" cy="60" rx="85" ry="45" fill="url(#beltGold)" stroke="#B8860B" strokeWidth="3"/>
                 <ellipse cx="100" cy="60" rx="65" ry="32" fill="none" stroke="#B8860B" strokeWidth="2"/>
                 <ellipse cx="100" cy="60" rx="50" ry="25" fill="url(#beltInner)" stroke="#FFD700" strokeWidth="1"/>
@@ -809,134 +410,50 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
               </svg>
             </div>
 
-            <p className="text-yellow-400 text-2xl font-bold mb-2 tracking-widest animate-pulse">
+            <p className="text-yellow-400 text-4xl font-bold mb-4 tracking-widest animate-pulse">
               ROYAL RUMBLE WINNER
             </p>
-            <p className="text-6xl font-black text-white mb-4 drop-shadow-[0_0_20px_rgba(255,255,255,0.5)] animate-[scaleIn_0.5s_ease-out]">
+
+            {/* Wrestler image circle */}
+            {winner.wrestlerImageUrl && (
+              <div className="mb-4 flex justify-center">
+                <div className="w-32 h-32 rounded-full overflow-hidden ring-4 ring-yellow-400 shadow-[0_0_40px_rgba(234,179,8,0.6)]">
+                  <img
+                    src={getProxiedImageUrl(winner.wrestlerImageUrl) || ""}
+                    alt={winner.wrestlerName || ""}
+                    className="w-full h-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <p className="text-8xl font-black text-white mb-6 drop-shadow-[0_0_30px_rgba(255,255,255,0.5)] animate-[scaleIn_0.5s_ease-out]">
               {winner.wrestlerName}
             </p>
-            <div className="flex items-center justify-center gap-4">
-              <span className="text-3xl font-bold text-yellow-300">#{winner.entryNumber}</span>
-              <span className="text-2xl text-white">-</span>
-              <span className="text-2xl text-yellow-400 font-bold">{getParticipantForEntry(winner.entryNumber)}</span>
+
+            <div className="flex items-center justify-center gap-6">
+              <span className="text-5xl font-bold text-yellow-300">#{winner.entryNumber}</span>
+              <span className="text-4xl text-white">-</span>
+              <div className="flex items-center gap-3">
+                {(() => {
+                  const winnerParticipant = getParticipantInfoForEntry(winner.entryNumber);
+                  return (
+                    <>
+                      {winnerParticipant?.profileImageUrl && (
+                        <img
+                          src={winnerParticipant.profileImageUrl}
+                          alt=""
+                          className="w-12 h-12 rounded-full ring-2 ring-yellow-400"
+                        />
+                      )}
+                      <span className="text-4xl text-yellow-400 font-bold">{winnerParticipant?.name || getParticipantForEntry(winner.entryNumber)}</span>
+                    </>
+                  );
+                })()}
+              </div>
             </div>
           </div>
-
-          {/* Full-Screen Floating Names Replay */}
-          {showCelebrationReplay && (
-            <div
-              ref={celebrationContainerRef}
-              className="absolute inset-0 pointer-events-none overflow-hidden z-20"
-            >
-              <style>{`
-                @keyframes wrestlerShake {
-                  0%, 100% { transform: translateX(0) rotate(0); }
-                  10% { transform: translateX(-3px) rotate(-2deg); }
-                  20% { transform: translateX(3px) rotate(2deg); }
-                  30% { transform: translateX(-3px) rotate(-2deg); }
-                  40% { transform: translateX(3px) rotate(2deg); }
-                  50% { transform: translateX(-3px) rotate(-1deg); }
-                  60% { transform: translateX(3px) rotate(1deg); }
-                  70% { transform: translateX(-2px) rotate(-1deg); }
-                  80% { transform: translateX(2px) rotate(1deg); }
-                  90% { transform: translateX(-1px) rotate(0); }
-                }
-                @keyframes wrestlerExplode {
-                  0% { transform: scale(1); opacity: 0.7; }
-                  30% { transform: scale(1.3); opacity: 0.9; }
-                  100% { transform: scale(0.1); opacity: 0; }
-                }
-              `}</style>
-              {floatingNames.map((name) => {
-                if (name.status === "eliminated") return null;
-
-                // Find the winner to give special treatment
-                const isWinner = winner?.id === name.id;
-                const isEliminating = name.status === "eliminating";
-                const isPendingElimination = name.status === "pending_elimination";
-
-                // Determine styling based on elimination phase
-                let animationStyle: React.CSSProperties = {};
-                let textColorClass = "text-white";
-                let containerAnimation = "";
-
-                if (isEliminating && name.eliminationPhase) {
-                  textColorClass = "text-red-500"; // Red throughout elimination
-
-                  switch (name.eliminationPhase) {
-                    case "red":
-                      // Phase 1: Just red text, no animation yet
-                      break;
-                    case "shake":
-                      // Phase 2: Shake animation
-                      containerAnimation = "wrestlerShake 0.4s ease-in-out";
-                      break;
-                    case "explode":
-                      // Phase 3: Explode animation
-                      animationStyle = {
-                        animation: "wrestlerExplode 0.3s ease-out forwards",
-                      };
-                      break;
-                  }
-                }
-
-                // Pending elimination names slightly pulse/glow to hint they're doomed
-                if (isPendingElimination) {
-                  textColorClass = "text-orange-300";
-                }
-
-                return (
-                  <div
-                    key={name.id}
-                    data-floating-name={name.id}
-                    className={`absolute flex items-center gap-2 px-3 py-2 rounded-lg whitespace-nowrap ${
-                      isWinner
-                        ? "bg-yellow-500/30 border-2 border-yellow-400"
-                        : "bg-black/40 backdrop-blur-sm"
-                    }`}
-                    style={{
-                      left: `${name.x}px`,
-                      top: `${name.y}px`,
-                      transform: `scale(${name.scale})`,
-                      opacity: name.opacity,
-                      transition: name.status === "entering"
-                        ? "transform 1.5s ease-out, opacity 1.5s ease-out"
-                        : "none",
-                      animation: containerAnimation || undefined,
-                      ...animationStyle,
-                    }}
-                  >
-                    <span
-                      className={`font-bold ${isWinner ? "text-yellow-300" : isEliminating || isPendingElimination ? textColorClass : "text-yellow-400"}`}
-                      style={{ fontSize: `${20 * name.scale}px` }}
-                    >
-                      #{name.entryNumber}
-                    </span>
-                    <span
-                      className={`font-black ${textColorClass}`}
-                      style={{ fontSize: `${28 * name.scale}px` }}
-                    >
-                      {name.wrestlerName}
-                    </span>
-                    {isWinner ? (
-                      <span className="text-yellow-400 text-2xl ml-1">👑</span>
-                    ) : (
-                      <span
-                        className="text-gray-400 ml-2"
-                        style={{ fontSize: `${16 * name.scale}px` }}
-                      >
-                        {name.duration}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {!showCelebrationReplay && (
-            <p className="text-gray-400 text-sm mt-8 relative z-10">Replay starting soon...</p>
-          )}
         </div>
       )}
 

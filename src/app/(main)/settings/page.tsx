@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
@@ -30,12 +30,37 @@ const AVATAR_STYLES = [
   { id: "fun-emoji", label: "Emoji" },
   { id: "bottts", label: "Robot" },
   { id: "pixel-art", label: "Pixel" },
+  { id: "lorelei", label: "Lorelei" },
+  { id: "notionists", label: "Notionists" },
+  { id: "thumbs", label: "Thumbs" },
+  { id: "shapes", label: "Shapes" },
 ] as const;
 
-const AVATAR_SEEDS = [
-  "tiger", "eagle", "storm", "blaze",
-  "frost", "shadow", "cosmic", "neon",
-];
+// Generate random seeds for avatar options
+const generateRandomSeeds = (count: number = 12): string[] => {
+  const words = [
+    "tiger", "eagle", "storm", "blaze", "frost", "shadow", "cosmic", "neon",
+    "phoenix", "dragon", "thunder", "crystal", "mystic", "ember", "lunar", "solar",
+    "vortex", "nebula", "aurora", "zenith", "azure", "crimson", "jade", "obsidian",
+    "stellar", "quantum", "cipher", "prism", "apex", "nova", "pulse", "spark",
+    "echo", "drift", "flux", "surge", "volt", "blitz", "rush", "flash",
+    "wave", "reef", "peak", "vale", "brook", "ridge", "cliff", "shore",
+  ];
+
+  const seeds: string[] = [];
+  const usedIndices = new Set<number>();
+
+  while (seeds.length < count) {
+    const randomIndex = Math.floor(Math.random() * words.length);
+    if (!usedIndices.has(randomIndex)) {
+      usedIndices.add(randomIndex);
+      // Add a random suffix to make seeds even more unique
+      seeds.push(`${words[randomIndex]}${Math.floor(Math.random() * 1000)}`);
+    }
+  }
+
+  return seeds;
+};
 
 const getDiceBearUrl = (style: string, seed: string) =>
   `https://api.dicebear.com/7.x/${style}/svg?seed=${seed}`;
@@ -62,6 +87,11 @@ export default function SettingsPage() {
   const [bio, setBio] = useState("");
   const [selectedAvatarStyle, setSelectedAvatarStyle] = useState<string>("avataaars");
   const [imageSearchOpen, setImageSearchOpen] = useState(false);
+  const [avatarSeeds, setAvatarSeeds] = useState<string[]>(() => generateRandomSeeds(12));
+
+  const regenerateAvatars = useCallback(() => {
+    setAvatarSeeds(generateRandomSeeds(12));
+  }, []);
 
   useEffect(() => {
     fetchProfile();
@@ -199,10 +229,24 @@ export default function SettingsPage() {
 
               {/* Avatar Picker */}
               <div className="space-y-3">
-                <Label className="text-white">Profile Avatar</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-white">Profile Avatar</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={regenerateAvatars}
+                    className="text-purple-400 hover:text-purple-300 hover:bg-purple-900/30"
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    New Options
+                  </Button>
+                </div>
 
                 {/* Style Tabs */}
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {AVATAR_STYLES.map((style) => (
                     <button
                       key={style.id}
@@ -219,9 +263,9 @@ export default function SettingsPage() {
                   ))}
                 </div>
 
-                {/* Avatar Grid */}
-                <div className="grid grid-cols-4 gap-3 p-3 bg-gray-900/50 rounded-lg">
-                  {AVATAR_SEEDS.map((seed) => {
+                {/* Avatar Grid - scrollable */}
+                <div className="grid grid-cols-4 gap-3 p-3 bg-gray-900/50 rounded-lg max-h-80 overflow-y-auto">
+                  {avatarSeeds.map((seed) => {
                     const avatarUrl = getDiceBearUrl(selectedAvatarStyle, seed);
                     const isSelected = profileImageUrl === avatarUrl;
 
@@ -254,6 +298,7 @@ export default function SettingsPage() {
                     );
                   })}
                 </div>
+                <p className="text-gray-500 text-sm">Click &quot;New Options&quot; to see different avatars</p>
               </div>
 
               {/* Custom URL Input */}

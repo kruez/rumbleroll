@@ -96,6 +96,12 @@ export async function PATCH(
           where: { id: eventId },
           data: { status: "COMPLETED" },
         });
+
+        // Auto-complete all parties for this event
+        await prisma.party.updateMany({
+          where: { eventId, status: { not: "COMPLETED" } },
+          data: { status: "COMPLETED" },
+        });
       }
     }
 
@@ -124,6 +130,12 @@ export async function PATCH(
         });
         await prisma.rumbleEvent.update({
           where: { id: eventId },
+          data: { status: "COMPLETED" },
+        });
+
+        // Auto-complete all parties for this event
+        await prisma.party.updateMany({
+          where: { eventId, status: { not: "COMPLETED" } },
           data: { status: "COMPLETED" },
         });
       }
