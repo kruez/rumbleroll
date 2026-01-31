@@ -733,9 +733,12 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
   // Find the next upcoming entry (first entry without a wrestler name)
   const nextUpEntryNumber = entries.find(e => !e.wrestlerName)?.entryNumber ?? null;
 
-  // Show pre-event QR lobby when numbers are assigned but event hasn't started yet
+  // Show pre-event QR lobby when party is in LOBBY or numbers assigned but event hasn't started
   const showPreEventQRLobby =
-    party.status === "NUMBERS_ASSIGNED" && party.event.status === "NOT_STARTED";
+    party.status === "LOBBY" ||
+    (party.status === "NUMBERS_ASSIGNED" && party.event.status === "NOT_STARTED");
+
+  const isNumbersAssigned = party.status === "NUMBERS_ASSIGNED";
 
   const getParticipantForEntry = (entryNumber: number) => {
     for (const p of party.participants) {
@@ -943,76 +946,23 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {party.status === "LOBBY" ? (
-        // Lobby view - show invite code and QR prominently
-        <div className="flex-1 flex flex-col items-center justify-center">
-          <div className="text-center mb-8">
-            <p className="text-2xl text-gray-400 mb-2">Waiting for players to join...</p>
-            <p className="text-lg text-purple-400">{party.participants.length} player{party.participants.length !== 1 ? "s" : ""} joined</p>
-          </div>
-
-          <div className="flex flex-col md:flex-row items-center gap-8 md:gap-16">
-            {/* Invite Code */}
-            <div className="text-center">
-              <p className="text-gray-400 text-lg mb-2">Join Code</p>
-              <div className="bg-gray-800/80 border-2 border-purple-500 rounded-xl px-8 py-6">
-                <span className="text-6xl md:text-7xl font-mono font-bold text-white tracking-[0.3em]">
-                  {party.inviteCode}
-                </span>
-              </div>
-            </div>
-
-            {/* QR Code */}
-            <div className="text-center">
-              <p className="text-gray-400 text-lg mb-2">Scan to Join</p>
-              <div className="bg-white p-4 rounded-xl">
-                <QRCodeSVG
-                  value={`${typeof window !== "undefined" ? window.location.origin : ""}/join?code=${party.inviteCode}`}
-                  size={200}
-                  level="M"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Player list */}
-          {party.participants.length > 0 && (
-            <div className="mt-12 w-full max-w-4xl">
-              <div className="flex flex-wrap justify-center gap-4">
-                {party.participants.map((p) => (
-                  <div
-                    key={p.id}
-                    className="flex items-center gap-2 bg-gray-800/50 border border-gray-600 rounded-lg px-4 py-2"
-                  >
-                    {p.user.profileImageUrl && (
-                      <img
-                        src={p.user.profileImageUrl}
-                        alt=""
-                        className="w-8 h-8 rounded-full"
-                      />
-                    )}
-                    <span className="text-white text-lg font-medium">
-                      {p.user.name || p.user.email.split("@")[0]}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      ) : showPreEventQRLobby ? (
-        // Pre-event QR lobby - numbers assigned but event hasn't started
+      {showPreEventQRLobby ? (
+        // Pre-event QR lobby - show QR code and participants
         <div className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-16 p-4 lg:p-8">
           {/* Left Section: QR Code and Join Info */}
           <div className="flex flex-col items-center">
             {/* Status Badge */}
             <div className="mb-6">
-              <span className="inline-block px-4 py-2 rounded-full text-lg font-bold bg-green-600/80 text-white">
-                NUMBERS ASSIGNED
+              <span className={`inline-block px-4 py-2 rounded-full text-lg font-bold ${
+                isNumbersAssigned
+                  ? "bg-green-600/80 text-white"
+                  : "bg-purple-600/80 text-white"
+              }`}>
+                {isNumbersAssigned ? "NUMBERS ASSIGNED" : "WAITING FOR PLAYERS"}
               </span>
             </div>
 
-            <p className="text-gray-400 text-xl mb-4">Join the party</p>
+            <p className="text-gray-400 text-xl mb-4">Scan to Join</p>
             <div className="bg-white p-6 rounded-2xl shadow-lg">
               <QRCodeSVG
                 value={`${typeof window !== "undefined" ? window.location.origin : ""}/join?code=${party.inviteCode}`}
@@ -1029,61 +979,70 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
 
             {/* Contextual Footer Message */}
             <p className="text-xl text-gray-400 mt-8 text-center max-w-md">
-              Get ready! Waiting for the event to start...
+              {isNumbersAssigned
+                ? "Get ready! Waiting for the event to start..."
+                : "Waiting for host to start the party..."}
             </p>
           </div>
 
-          {/* Right Section: Participants with assigned numbers */}
+          {/* Right Section: Participants */}
           <div className="flex-1 max-w-2xl w-full">
             <h2 className="text-2xl font-bold text-white mb-6 text-center lg:text-left">
-              Players & Numbers
+              {isNumbersAssigned ? "Players & Numbers" : "Players"}
               <span className="text-purple-400 ml-2">({party.participants.length})</span>
             </h2>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-2">
-              {party.participants.map((p, idx) => {
-                const colorIndex = participantColorMap.get(p.id) ?? idx % PLAYER_COLORS.length;
-                const playerColor = PLAYER_COLORS[colorIndex];
-                const displayName = p.user.name || p.user.email.split("@")[0];
-                const numbers = p.assignments.map(a => a.entryNumber).sort((a, b) => a - b);
+            {party.participants.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-500 text-xl">No players have joined yet</p>
+                <p className="text-gray-600 text-lg mt-2">Share the code or scan the QR</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-2">
+                {party.participants.map((p, idx) => {
+                  const colorIndex = participantColorMap.get(p.id) ?? idx % PLAYER_COLORS.length;
+                  const playerColor = PLAYER_COLORS[colorIndex];
+                  const displayName = p.user.name || p.user.email.split("@")[0];
+                  const numbers = p.assignments.map(a => a.entryNumber).sort((a, b) => a - b);
 
-                return (
-                  <div
-                    key={p.id}
-                    className={`flex items-center gap-3 ${playerColor.bg} border-2 ${playerColor.border} rounded-lg p-3`}
-                  >
-                    {p.user.profileImageUrl ? (
-                      <img
-                        src={p.user.profileImageUrl}
-                        alt=""
-                        className="w-12 h-12 rounded-full flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="w-12 h-12 rounded-full flex-shrink-0 bg-purple-600 flex items-center justify-center">
-                        <span className="text-white text-lg font-bold">
-                          {displayName.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-white text-lg font-medium truncate">{displayName}</p>
-                      {numbers.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {numbers.map(num => (
-                            <span
-                              key={num}
-                              className={`text-sm font-bold ${playerColor.text} bg-black/30 px-2 py-0.5 rounded`}
-                            >
-                              #{num}
-                            </span>
-                          ))}
+                  return (
+                    <div
+                      key={p.id}
+                      className={`flex items-center gap-3 ${playerColor.bg} border-2 ${playerColor.border} rounded-lg p-3`}
+                    >
+                      {p.user.profileImageUrl ? (
+                        <img
+                          src={p.user.profileImageUrl}
+                          alt=""
+                          className="w-12 h-12 rounded-full flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-full flex-shrink-0 bg-purple-600 flex items-center justify-center">
+                          <span className="text-white text-lg font-bold">
+                            {displayName.charAt(0).toUpperCase()}
+                          </span>
                         </div>
                       )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-lg font-medium truncate">{displayName}</p>
+                        {isNumbersAssigned && numbers.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {numbers.map(num => (
+                              <span
+                                key={num}
+                                className={`text-sm font-bold ${playerColor.text} bg-black/30 px-2 py-0.5 rounded`}
+                              >
+                                #{num}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       ) : (
