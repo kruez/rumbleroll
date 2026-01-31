@@ -120,30 +120,47 @@ export function distributeNumbers(
     });
 
   } else if (mode === "SHARED") {
-    // Process full tiers: each player gets exactly 1 from each
-    const fullTiers = tiers.filter(t => t.length === numParticipants);
-    const partialTier = tiers.find(t => t.length < numParticipants);
+    // SHARED mode: randomly select which numbers will be shared,
+    // then distribute remaining numbers using stratified tiers
 
-    // For each full tier, randomly assign 1 number to each player
-    for (const tier of fullTiers) {
-      const shuffledTier = shuffle([...tier]);
-      const shuffledPlayers = shuffle([...shuffledParticipants]);
-      shuffledPlayers.forEach((player, i) => {
-        result.owned.get(player)!.push(shuffledTier[i]);
-      });
-    }
+    // Calculate how many numbers will be shared
+    const numShared = remainder;
 
-    // Sort each player's owned numbers
-    result.owned.forEach((numbers, participantId) => {
-      result.owned.set(participantId, numbers.sort((a, b) => a - b));
-    });
+    if (numShared === 0) {
+      // Perfect division - no shared numbers needed
+      // Process all tiers: each player gets exactly 1 from each
+      for (const tier of tiers) {
+        const shuffledTier = shuffle([...tier]);
+        const shuffledPlayers = shuffle([...shuffledParticipants]);
+        shuffledPlayers.forEach((player, i) => {
+          result.owned.get(player)!.push(shuffledTier[i]);
+        });
+      }
+    } else {
+      // Randomly select which numbers will be shared (from all 30)
+      const allNumbers = shuffle(Array.from({ length: 30 }, (_, i) => i + 1));
+      const sharedNumbers = new Set(allNumbers.slice(0, numShared));
+      const ownedNumbers = allNumbers.slice(numShared);
 
-    // Partial tier numbers become shared
-    if (partialTier && partialTier.length > 0) {
-      const remainderNumbers = partialTier;
+      // Create stratified tiers from the owned numbers (preserving their natural order for tiers)
+      const sortedOwnedNumbers = ownedNumbers.sort((a, b) => a - b);
+      const ownedTiers: number[][] = [];
+      for (let i = 0; i < sortedOwnedNumbers.length; i += numParticipants) {
+        const tier = sortedOwnedNumbers.slice(i, i + numParticipants);
+        ownedTiers.push(shuffle(tier));
+      }
+
+      // For each tier, randomly assign 1 number to each player
+      for (const tier of ownedTiers) {
+        const shuffledPlayers = shuffle([...shuffledParticipants]);
+        shuffledPlayers.forEach((player, i) => {
+          result.owned.get(player)!.push(tier[i]);
+        });
+      }
 
       // Shuffle participants for fair share distribution
       const shuffledForSharing = shuffle([...shuffledParticipants]);
+      const remainderNumbers = Array.from(sharedNumbers).sort((a, b) => a - b);
 
       // Calculate how many participants share each remainder number
       const shareGroupSizes: number[] = [];
@@ -164,6 +181,11 @@ export function distributeNumbers(
         participantIndex += shareSize;
       });
     }
+
+    // Sort each player's owned numbers
+    result.owned.forEach((numbers, participantId) => {
+      result.owned.set(participantId, numbers.sort((a, b) => a - b));
+    });
   }
 
   return result;
