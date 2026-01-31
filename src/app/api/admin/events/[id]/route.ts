@@ -1,94 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { distributeNumbers, DistributionMode } from "@/utils/numberDistribution";
-
-/**
- * Auto-starts a party by distributing numbers to eligible participants.
- * This is called when an event transitions to IN_PROGRESS.
- */
-async function autoStartParty(partyId: string): Promise<{ success: boolean; error?: string }> {
-  const party = await prisma.party.findUnique({
-    where: { id: partyId },
-    include: { participants: true },
-  });
-
-  if (!party || party.status !== "LOBBY") {
-    return { success: false, error: "Party not in LOBBY status" };
-  }
-
-  if (party.participants.length === 0) {
-    // Skip empty parties
-    return { success: false, error: "No participants" };
-  }
-
-  // When entry fee is set, only include paid participants
-  let eligibleParticipants = party.participants;
-  if (party.entryFee && party.entryFee > 0) {
-    eligibleParticipants = party.participants.filter(p => p.hasPaid);
-    if (eligibleParticipants.length === 0) {
-      // Skip if no paid participants
-      return { success: false, error: "No paid participants" };
-    }
-  }
-
-  // Distribute numbers only to eligible participants using the party's distribution mode
-  const participantIds = eligibleParticipants.map(p => p.id);
-  const mode = party.distributionMode as DistributionMode;
-  const distribution = distributeNumbers(participantIds, mode);
-
-  // Create assignments in a transaction
-  await prisma.$transaction(async (tx) => {
-    const assignmentsData: {
-      participantId: string;
-      entryNumber: number;
-      partyId: string;
-      isShared: boolean;
-      shareGroup: number | null;
-    }[] = [];
-
-    // Add owned (non-shared) assignments
-    distribution.owned.forEach((numbers, participantId) => {
-      numbers.forEach(num => {
-        assignmentsData.push({
-          participantId,
-          entryNumber: num,
-          partyId: party.id,
-          isShared: false,
-          shareGroup: null,
-        });
-      });
-    });
-
-    // Add shared assignments (for SHARED mode)
-    let shareGroupIndex = 0;
-    distribution.shared.forEach((participantIds, entryNumber) => {
-      participantIds.forEach(participantId => {
-        assignmentsData.push({
-          participantId,
-          entryNumber,
-          partyId: party.id,
-          isShared: true,
-          shareGroup: shareGroupIndex,
-        });
-      });
-      shareGroupIndex++;
-    });
-
-    // Create all assignments at once
-    await tx.numberAssignment.createMany({
-      data: assignmentsData,
-    });
-
-    // Update party status
-    await tx.party.update({
-      where: { id: party.id },
-      data: { status: "NUMBERS_ASSIGNED" },
-    });
-  });
-
-  return { success: true };
-}
 
 // GET /api/admin/events/[id] - Get event details
 export async function GET(
@@ -153,19 +65,6 @@ export async function PATCH(
         data: { enteredAt: new Date() },
       });
 
-      // Auto-start all LOBBY parties for this event
-      const lobbyParties = await prisma.party.findMany({
-        where: { eventId: id, status: "LOBBY" },
-        select: { id: true, name: true },
-      });
-
-      const autoStartResults: { partyId: string; name: string; success: boolean; error?: string }[] = [];
-      for (const party of lobbyParties) {
-        const result = await autoStartParty(party.id);
-        autoStartResults.push({ partyId: party.id, name: party.name, ...result });
-      }
-
-      console.log(`Auto-started ${autoStartResults.filter(r => r.success).length}/${lobbyParties.length} parties for event ${id}`, autoStartResults);
     }
 
     // If transitioning to COMPLETED, auto-complete all NUMBERS_ASSIGNED parties

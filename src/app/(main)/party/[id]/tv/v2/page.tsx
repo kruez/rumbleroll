@@ -300,7 +300,7 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
         clearTimerRef.current = null;
       }
     };
-  }, [entranceQueue, currentEntrance]);
+  }, [entranceQueue]);
 
   // Helper to format duration as MM:SS
   const formatDuration = useCallback((enteredAt: string | null, eliminatedAt: string | null): string => {
