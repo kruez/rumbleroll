@@ -733,6 +733,10 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
   // Find the next upcoming entry (first entry without a wrestler name)
   const nextUpEntryNumber = entries.find(e => !e.wrestlerName)?.entryNumber ?? null;
 
+  // Show pre-event QR lobby when numbers are assigned but event hasn't started yet
+  const showPreEventQRLobby =
+    party.status === "NUMBERS_ASSIGNED" && party.event.status === "NOT_STARTED";
+
   const getParticipantForEntry = (entryNumber: number) => {
     for (const p of party.participants) {
       if (p.assignments.some((a) => a.entryNumber === entryNumber)) {
@@ -995,6 +999,92 @@ export default function TVDisplayV2Page({ params }: { params: Promise<{ id: stri
               </div>
             </div>
           )}
+        </div>
+      ) : showPreEventQRLobby ? (
+        // Pre-event QR lobby - numbers assigned but event hasn't started
+        <div className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-16 p-4 lg:p-8">
+          {/* Left Section: QR Code and Join Info */}
+          <div className="flex flex-col items-center">
+            {/* Status Badge */}
+            <div className="mb-6">
+              <span className="inline-block px-4 py-2 rounded-full text-lg font-bold bg-green-600/80 text-white">
+                NUMBERS ASSIGNED
+              </span>
+            </div>
+
+            <p className="text-gray-400 text-xl mb-4">Join the party</p>
+            <div className="bg-white p-6 rounded-2xl shadow-lg">
+              <QRCodeSVG
+                value={`${typeof window !== "undefined" ? window.location.origin : ""}/join?code=${party.inviteCode}`}
+                size={256}
+                level="M"
+              />
+            </div>
+            <p className="text-gray-400 text-lg mt-6 mb-2">Join Code</p>
+            <div className="bg-gray-800/80 border-2 border-purple-500 rounded-xl px-8 py-4">
+              <span className="text-5xl md:text-6xl font-mono font-bold text-white tracking-[0.3em]">
+                {party.inviteCode}
+              </span>
+            </div>
+
+            {/* Contextual Footer Message */}
+            <p className="text-xl text-gray-400 mt-8 text-center max-w-md">
+              Get ready! Waiting for the event to start...
+            </p>
+          </div>
+
+          {/* Right Section: Participants with assigned numbers */}
+          <div className="flex-1 max-w-2xl w-full">
+            <h2 className="text-2xl font-bold text-white mb-6 text-center lg:text-left">
+              Players & Numbers
+              <span className="text-purple-400 ml-2">({party.participants.length})</span>
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-2">
+              {party.participants.map((p, idx) => {
+                const colorIndex = participantColorMap.get(p.id) ?? idx % PLAYER_COLORS.length;
+                const playerColor = PLAYER_COLORS[colorIndex];
+                const displayName = p.user.name || p.user.email.split("@")[0];
+                const numbers = p.assignments.map(a => a.entryNumber).sort((a, b) => a - b);
+
+                return (
+                  <div
+                    key={p.id}
+                    className={`flex items-center gap-3 ${playerColor.bg} border-2 ${playerColor.border} rounded-lg p-3`}
+                  >
+                    {p.user.profileImageUrl ? (
+                      <img
+                        src={p.user.profileImageUrl}
+                        alt=""
+                        className="w-12 h-12 rounded-full flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full flex-shrink-0 bg-purple-600 flex items-center justify-center">
+                        <span className="text-white text-lg font-bold">
+                          {displayName.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-lg font-medium truncate">{displayName}</p>
+                      {numbers.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {numbers.map(num => (
+                            <span
+                              key={num}
+                              className={`text-sm font-bold ${playerColor.text} bg-black/30 px-2 py-0.5 rounded`}
+                            >
+                              #{num}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       ) : (
         // Active game view - 6x5 grid of expanded entry cards
